@@ -16,10 +16,10 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#if HAVE_CONFIG_H
+#ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
 
@@ -44,6 +44,9 @@
 #ifdef _WIN32
 #include <windows.h>
 #endif
+#ifdef ENABLE_OPENSSL
+#include <openssl/err.h>
+#endif /* ENABLE_OPENSSL */
 
 #include "internal.h"
 
@@ -67,6 +70,49 @@ void sc_do_log_color(sc_context_t *ctx, int level, const char *file, int line, c
 	sc_do_log_va(ctx, level, file, line, func, color, format, ap);
 	va_end(ap);
 }
+
+#ifdef ENABLE_OPENSSL
+void sc_do_log_openssl(sc_context_t *ctx, int level, const char *file, int line, const char *func)
+{
+	BIO *bio = NULL;
+	int length, rc;
+	char *buffer = NULL;
+
+	if ((bio = BIO_new(BIO_s_mem())) == NULL) {
+		sc_do_log(ctx, level, file, line, func, "Cannot log OpenSSL error");
+		goto end;
+	}
+	ERR_print_errors(bio);
+
+	length = BIO_pending(bio);
+	if (length <= 0) {
+		/* no error? */
+		goto end;
+	}
+	/* trailing null byte */
+	buffer = malloc(length + 1);
+	if (buffer == NULL) {
+		sc_do_log(ctx, level, file, line, func, "No memory!");
+		goto end;
+	}
+	rc = BIO_read(bio, buffer, length);
+	buffer[length] = '\0';
+	if (rc <= 0) {
+		sc_do_log(ctx, level, file, line, func, "Cannot read OpenSSL error");
+		goto end;
+	}
+
+	sc_do_log(ctx, level, file, line, func, "OpenSSL error\n%s", buffer);
+end:
+	free(buffer);
+	BIO_free(bio);
+}
+#else
+void sc_do_log_openssl(sc_context_t *ctx, int level, const char *file, int line, const char *func)
+{
+	sc_do_log(ctx, level, file, line, func, "OpenSSL not enabled");
+}
+#endif
 
 void sc_do_log_noframe(sc_context_t *ctx, int level, const char *format, va_list args)
 {
@@ -170,6 +216,11 @@ void _sc_log(struct sc_context *ctx, const char *format, ...)
 	va_start(ap, format);
 	sc_do_log_va(ctx, SC_LOG_DEBUG_NORMAL, NULL, 0, NULL, 0, format, ap);
 	va_end(ap);
+}
+
+void _sc_log_openssl(struct sc_context *ctx)
+{
+	sc_do_log_openssl(ctx, SC_LOG_DEBUG_DEPS, NULL, 0, NULL);
 }
 
 static int is_a_tty(FILE *fp)

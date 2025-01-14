@@ -15,10 +15,10 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#if HAVE_CONFIG_H
+#ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
 
@@ -45,6 +45,7 @@ static int insert_cert(
 	struct sc_pkcs15_cert_info cert_info;
 	struct sc_pkcs15_object cert_obj;
 	unsigned char cert[20];
+	size_t cert_len = 0;
 	int r;
 
 	memset(&cert_info, 0, sizeof(cert_info));
@@ -57,24 +58,33 @@ static int insert_cert(
 	strlcpy(cert_obj.label, label, sizeof(cert_obj.label));
 	cert_obj.flags = writable ? SC_PKCS15_CO_FLAG_MODIFIABLE : 0;
 
-	if(sc_select_file(card, &cert_info.path, NULL)!=SC_SUCCESS){
-		sc_log(ctx, 
-			"Select(%s) failed\n", path);
+	if (sc_select_file(card, &cert_info.path, NULL) != SC_SUCCESS) {
+		sc_log(ctx, "Select(%s) failed", path);
 		return 1;
 	}
-	if(sc_read_binary(card, 0, cert, sizeof(cert), 0)<0){
-		sc_log(ctx, 
-			"ReadBinary(%s) failed\n", path);
+	r = sc_read_binary(card, 0, cert, sizeof(cert), 0);
+	if (r <= 0) {
+		sc_log(ctx, "ReadBinary(%s) failed\n", path);
 		return 2;
 	}
-	if(cert[0]!=0x30 || cert[1]!=0x82){
-		sc_log(ctx, 
-			"Invalid Cert: %02X:%02X:...\n", cert[0], cert[1]);
+	cert_len = r; /* actual number of read bytes */
+	if (cert_len < 4) {
+		sc_log(ctx, "Invalid certificate length");
+		return 3;
+	}
+	if (cert[0] != 0x30 || cert[1] != 0x82) {
+		sc_log(ctx, "Invalid Cert: %02X:%02X:...\n", cert[0], cert[1]);
 		return 3;
 	}
 
 	/* some certificates are prefixed by an OID */
-	if(cert[4]==0x06 && cert[5]<10 && cert[6+cert[5]]==0x30 && cert[7+cert[5]]==0x82){
+	if (cert_len >= 5 && (size_t)(7 + cert[5]) <= cert_len &&
+			cert[4] == 0x06 && cert[5] < 10 && cert[6 + cert[5]] == 0x30 &&
+			cert[7 + cert[5]] == 0x82) {
+		if ((size_t)(9 + cert[5]) > cert_len) {
+			sc_log(ctx, "Invalid certificate length");
+			return 3;
+		}
 		cert_info.path.index=6+cert[5];
 		cert_info.path.count=(cert[8+cert[5]]<<8) + cert[9+cert[5]] + 4;
 	} else {
@@ -82,12 +92,12 @@ static int insert_cert(
 		cert_info.path.count=(cert[2]<<8) + cert[3] + 4;
 	}
 
-	r=sc_pkcs15emu_add_x509_cert(p15card, &cert_obj, &cert_info);
-	if(r!=SC_SUCCESS){
-		sc_log(ctx,  "sc_pkcs15emu_add_x509_cert(%s) failed\n", path);
+	r = sc_pkcs15emu_add_x509_cert(p15card, &cert_obj, &cert_info);
+	if (r != SC_SUCCESS) {
+		sc_log(ctx, "sc_pkcs15emu_add_x509_cert(%s) failed", path);
 		return 4;
 	}
-	sc_log(ctx,  "%s: OK, Index=%d, Count=%d\n", path, cert_info.path.index, cert_info.path.count);
+	sc_log(ctx, "%s: OK, Index=%d, Count=%d", path, cert_info.path.index, cert_info.path.count);
 	return 0;
 }
 
@@ -130,14 +140,11 @@ static int insert_key(
 			prkey_info.path.len -= 2;
 		sc_append_file_id(&prkey_info.path, 0x5349);
 		if (sc_select_file(card, &prkey_info.path, NULL) != SC_SUCCESS) {
-			sc_log(ctx, 
-				"Select(%s) failed\n",
-				sc_print_path(&prkey_info.path));
+			sc_log(ctx, "Select(%s) failed", sc_print_path(&prkey_info.path));
 			return 1;
 		}
-		sc_log(ctx, 
-			"Searching for Key-Ref %02X\n", key_reference);
-		while ((r = sc_read_record(card, ++rec_no, buf, sizeof(buf), SC_RECORD_BY_REC_NR)) > 0) {
+		sc_log(ctx, "Searching for Key-Ref %02X", key_reference);
+		while ((r = sc_read_record(card, ++rec_no, 0, buf, sizeof(buf), SC_RECORD_BY_REC_NR)) > 0) {
 			int found = 0;
 			if (buf[0] != 0xA0 || r < 2)
 				continue;
@@ -149,7 +156,7 @@ static int insert_key(
 				break;
 		}
 		if (r <= 0) {
-			sc_log(ctx, "No EF_KEYD-Record found\n");
+			sc_log(ctx, "No EF_KEYD-Record found");
 			return 1;
 		}
 		for (i = 0; i + 1 < r; i += 2 + buf[i + 1]) {
@@ -161,9 +168,7 @@ static int insert_key(
 	} else {
 		if (sc_select_file(card, &prkey_info.path, &f) != SC_SUCCESS
 			   	|| !f->prop_attr || f->prop_attr_len < 2){
-			sc_log(ctx, 
-				"Select(%s) failed\n",
-				sc_print_path(&prkey_info.path));
+			sc_log(ctx, "Select(%s) failed", sc_print_path(&prkey_info.path));
 			sc_file_free(f);
 			return 1;
 		}
@@ -233,14 +238,11 @@ static int insert_pin(
 		}
 		sc_append_file_id(&pin_info.path, 0x5049);
 		if (sc_select_file(card, &pin_info.path, NULL) != SC_SUCCESS) {
-			sc_log(ctx, 
-				"Select(%s) failed\n",
-				sc_print_path(&pin_info.path));
+			sc_log(ctx, "Select(%s) failed", sc_print_path(&pin_info.path));
 			return 1;
 		}
-		sc_log(ctx, 
-			"Searching for PIN-Ref %02X\n", pin_reference);
-		while ((r = sc_read_record(card, ++rec_no, buf, sizeof(buf), SC_RECORD_BY_REC_NR)) > 0) {
+		sc_log(ctx, "Searching for PIN-Ref %02X", pin_reference);
+		while ((r = sc_read_record(card, ++rec_no, 0, buf, sizeof(buf), SC_RECORD_BY_REC_NR)) > 0) {
 			int found = 0, fbz = -1;
 			if (r < 2 || buf[0] != 0xA0)
 				continue;
@@ -361,7 +363,7 @@ static int detect_netkey(
 		insert_cert(p15card, dirpath(dir,"C000"), 0x49, 1, "SigG Zertifikat 1");
 		insert_cert(p15card, dirpath(dir,"4331"), 0x49, 1, "SigG Zertifikat 2");
 		insert_cert(p15card, dirpath(dir,"4332"), 0x49, 1, "SigG Zertifikat 3");
-		
+
 		if(card->type==SC_CARD_TYPE_TCOS_V3){
 			insert_key(p15card, dirpath(dir,"0000"), 0x49, 0x84, 2048, 5, "SigG Schluessel");
 		} else {
@@ -530,10 +532,15 @@ int sc_pkcs15emu_tcos_init_ex(
 	/* get the card serial number */
 	r = sc_card_ctl(card, SC_CARDCTL_GET_SERIALNR, &serialnr);
 	if (r < 0) {
-		sc_log(ctx,  "unable to get ICCSN\n");
+		sc_log(ctx, "unable to get ICCSN");
 		return SC_ERROR_WRONG_CARD;
 	}
-	sc_bin_to_hex(serialnr.value, serialnr.len , serial, sizeof(serial), 0);
+	r = sc_bin_to_hex(serialnr.value, serialnr.len, serial, sizeof(serial), 0);
+	if (r != SC_SUCCESS) {
+		sc_log(ctx, "serial number invalid");
+		return SC_ERROR_INTERNAL;
+	}
+
 	serial[19] = '\0';
 	set_string(&p15card->tokeninfo->serial_number, serial);
 
@@ -543,5 +550,6 @@ int sc_pkcs15emu_tcos_init_ex(
 	if(!detect_signtrust(p15card)) return SC_SUCCESS;
 	if(!detect_datev(p15card)) return SC_SUCCESS;
 
+	sc_pkcs15_card_clear(p15card);
 	return SC_ERROR_INTERNAL;
 }

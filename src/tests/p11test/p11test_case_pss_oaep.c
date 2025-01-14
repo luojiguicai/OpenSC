@@ -34,7 +34,7 @@ size_t global_message_length = sizeof(SHORT_MESSAGE_TO_SIGN);
 const CK_MECHANISM_TYPE *
 get_oaep_mechanism_hashes(CK_MECHANISM_TYPE mech)
 {
-	static CK_MECHANISM_TYPE h[6];
+	static CK_MECHANISM_TYPE h[10];
 
 	switch (mech) {
 	case CKM_RSA_PKCS_OAEP:
@@ -43,7 +43,11 @@ get_oaep_mechanism_hashes(CK_MECHANISM_TYPE mech)
 		h[2] = CKM_SHA256;
 		h[3] = CKM_SHA384;
 		h[4] = CKM_SHA512;
-		h[5] = -1;
+		h[5] = CKM_SHA3_224;
+		h[6] = CKM_SHA3_256;
+		h[7] = CKM_SHA3_384;
+		h[8] = CKM_SHA3_512;
+		h[9] = -1;
 		break;
 
 	default:
@@ -56,7 +60,7 @@ get_oaep_mechanism_hashes(CK_MECHANISM_TYPE mech)
 const CK_MECHANISM_TYPE *
 get_pss_mechanism_hashes(CK_MECHANISM_TYPE mech)
 {
-	static CK_MECHANISM_TYPE h[6];
+	static CK_MECHANISM_TYPE h[10];
 
 	switch (mech) {
 	case CKM_RSA_PKCS_PSS:
@@ -65,7 +69,11 @@ get_pss_mechanism_hashes(CK_MECHANISM_TYPE mech)
 		h[2] = CKM_SHA256;
 		h[3] = CKM_SHA384;
 		h[4] = CKM_SHA512;
-		h[5] = -1;
+		h[5] = CKM_SHA3_224;
+		h[6] = CKM_SHA3_256;
+		h[7] = CKM_SHA3_384;
+		h[8] = CKM_SHA3_512;
+		h[9] = -1;
 		break;
 
 	case CKM_SHA1_RSA_PKCS_PSS:
@@ -93,6 +101,26 @@ get_pss_mechanism_hashes(CK_MECHANISM_TYPE mech)
 		h[1] = -1;
 		break;
 
+	case CKM_SHA3_224_RSA_PKCS_PSS:
+		h[0] = CKM_SHA3_224;
+		h[1] = -1;
+		break;
+
+	case CKM_SHA3_256_RSA_PKCS_PSS:
+		h[0] = CKM_SHA3_256;
+		h[1] = -1;
+		break;
+
+	case CKM_SHA3_384_RSA_PKCS_PSS:
+		h[0] = CKM_SHA3_384;
+		h[1] = -1;
+		break;
+
+	case CKM_SHA3_512_RSA_PKCS_PSS:
+		h[0] = CKM_SHA3_512;
+		h[1] = -1;
+		break;
+
 	default:
 		h[0] = -1;
 		break;
@@ -113,13 +141,19 @@ get_mechanism_hashes(CK_MECHANISM_TYPE mech)
 const CK_RSA_PKCS_MGF_TYPE *
 get_mgfs(void)
 {
-	static CK_RSA_PKCS_MGF_TYPE h[6];
+	static CK_RSA_PKCS_MGF_TYPE h[10];
+
 	h[0] = CKG_MGF1_SHA1;
 	h[1] = CKG_MGF1_SHA224;
 	h[2] = CKG_MGF1_SHA256;
 	h[3] = CKG_MGF1_SHA384;
 	h[4] = CKG_MGF1_SHA512;
-	h[5] = -1;
+	h[5] = CKG_MGF1_SHA3_224;
+	h[6] = CKG_MGF1_SHA3_256;
+	h[7] = CKG_MGF1_SHA3_384;
+	h[8] = CKG_MGF1_SHA3_512;
+	h[9] = -1;
+
 	return h;
 }
 
@@ -137,6 +171,18 @@ const EVP_MD *mgf_cryptoki_to_ossl(CK_RSA_PKCS_MGF_TYPE mgf)
 
 	case CKG_MGF1_SHA512:
 		return EVP_sha512();
+
+	case CKG_MGF1_SHA3_224:
+		return EVP_sha3_224();
+
+	case CKG_MGF1_SHA3_256:
+		return EVP_sha3_256();
+
+	case CKG_MGF1_SHA3_384:
+		return EVP_sha3_384();
+
+	case CKG_MGF1_SHA3_512:
+		return EVP_sha3_512();
 
 	case CKG_MGF1_SHA1:
 	default:
@@ -161,6 +207,18 @@ const EVP_MD *md_cryptoki_to_ossl(CK_MECHANISM_TYPE hash)
 	case CKM_SHA512:
 		return EVP_sha512();
 
+	case CKM_SHA3_224:
+		return EVP_sha3_224();
+
+	case CKM_SHA3_256:
+		return EVP_sha3_256();
+
+	case CKM_SHA3_384:
+		return EVP_sha3_384();
+
+	case CKM_SHA3_512:
+		return EVP_sha3_512();
+
 	case CKM_SHA_1:
 	default:
 		return EVP_sha1();
@@ -179,6 +237,14 @@ size_t get_hash_length(CK_MECHANISM_TYPE mech)
 		return SHA384_DIGEST_LENGTH;
 	case CKM_SHA512:
 		return SHA512_DIGEST_LENGTH;
+	case CKM_SHA3_224:
+		return 224 / 8;
+	case CKM_SHA3_256:
+		return 256 / 8;
+	case CKM_SHA3_384:
+		return 384 / 8;
+	case CKM_SHA3_512:
+		return 512 / 8;
 	default:
 	case CKM_SHA_1:
 		return SHA_DIGEST_LENGTH;
@@ -188,24 +254,65 @@ size_t get_hash_length(CK_MECHANISM_TYPE mech)
 CK_BYTE *hash_message(const CK_BYTE *message, size_t message_length,
     CK_MECHANISM_TYPE hash)
 {
+	CK_BYTE *out = NULL;
+	const EVP_MD *md = NULL;
+	size_t digest_len = 0;
+
 	switch (hash) {
 	case CKM_SHA224:
-		return SHA224(message, message_length, NULL);
+		digest_len = SHA224_DIGEST_LENGTH;
+		md = EVP_sha224();
+		break;
 
 	case CKM_SHA256:
-		return SHA256(message, message_length, NULL);
+		digest_len = SHA256_DIGEST_LENGTH;
+		md = EVP_sha256();
+		break;
 
 	case CKM_SHA384:
-		return SHA384(message, message_length, NULL);
+		digest_len = SHA384_DIGEST_LENGTH;
+		md = EVP_sha384();
+		break;
 
 	case CKM_SHA512:
-		return SHA512(message, message_length, NULL);
+		digest_len = SHA512_DIGEST_LENGTH;
+		md = EVP_sha512();
+		break;
+
+	case CKM_SHA3_224:
+		digest_len = 224 / 8;
+		md = EVP_sha3_224();
+		break;
+
+	case CKM_SHA3_256:
+		digest_len = 256 / 8;
+		md = EVP_sha3_256();
+		break;
+
+	case CKM_SHA3_384:
+		digest_len = 384 / 8;
+		md = EVP_sha3_384();
+		break;
+
+	case CKM_SHA3_512:
+		digest_len = 512 / 8;
+		md = EVP_sha3_512();
+		break;
 
 	case CKM_SHA_1:
 	default:
-		return SHA1(message, message_length, NULL);
-
+		digest_len = SHA_DIGEST_LENGTH;
+		md = EVP_sha1();
+		break;
 	}
+
+	out = malloc(digest_len);
+	if (!out ||
+		EVP_Digest(message, message_length, out, NULL, md, NULL) != 1) {
+		free(out);
+		return NULL;
+	}
+	return out;
 }
 
 int oaep_encrypt_message_openssl(test_cert_t *o, token_info_t *info, CK_BYTE *message,
@@ -216,20 +323,11 @@ int oaep_encrypt_message_openssl(test_cert_t *o, token_info_t *info, CK_BYTE *me
 	EVP_PKEY_CTX *pctx = NULL;
 	const EVP_MD *md = EVP_md_null();
 	const EVP_MD *mgf1_md = EVP_md_null();
-	EVP_PKEY *key = NULL;
 
 	md = md_cryptoki_to_ossl(mech->hash);
 	mgf1_md = mgf_cryptoki_to_ossl(mech->mgf);
 
-	if ((key = EVP_PKEY_new()) == NULL
-		|| RSA_up_ref(o->key.rsa) < 1
-		|| EVP_PKEY_set1_RSA(key, o->key.rsa) != 1) {
-		fprintf(stderr, " [ ERROR %s ] Failed to initialize EVP_PKEY. Error: %s\n",
-			o->id_str, ERR_error_string(ERR_peek_last_error(), NULL));
-		goto out;
-	}
-
-	if ((pctx = EVP_PKEY_CTX_new(key, NULL)) == NULL
+	if ((pctx = EVP_PKEY_CTX_new(o->key, NULL)) == NULL
 		|| EVP_PKEY_encrypt_init(pctx) != 1
 		|| EVP_PKEY_CTX_set_rsa_padding(pctx, RSA_PKCS1_OAEP_PADDING) != 1
 		|| EVP_PKEY_CTX_set_rsa_oaep_md(pctx, md) != 1
@@ -254,8 +352,7 @@ int oaep_encrypt_message_openssl(test_cert_t *o, token_info_t *info, CK_BYTE *me
 	}
 out:
 	EVP_PKEY_CTX_free(pctx);
-	EVP_PKEY_free(key);
-	return enc_length;
+	return (int)enc_length;
 }
 
 void fill_oaep_params(CK_RSA_PKCS_OAEP_PARAMS *oaep_params,
@@ -312,7 +409,7 @@ int oaep_encrypt_message(test_cert_t *o, token_info_t *info, CK_BYTE *message,
 		*enc_message, &enc_message_length);
 	if (rv == CKR_OK) {
 		mech->result_flags |= FLAGS_DECRYPT_OPENSSL;
-		return enc_message_length;
+		return (int)enc_message_length;
 	}
 	debug_print("   C_Encrypt: rv = 0x%.8lX", rv);
 
@@ -384,7 +481,7 @@ int oaep_encrypt_decrypt_test(test_cert_t *o, token_info_t *info, test_mech_t *m
 		return 0;
 	}
 
-	if (o->type != EVP_PK_RSA) {
+	if (o->type != EVP_PKEY_RSA) {
 		debug_print(" [ KEY %s ] Skip non-RSA key for encryption", o->id_str);
 		return 0;
 	}
@@ -396,13 +493,13 @@ int oaep_encrypt_decrypt_test(test_cert_t *o, token_info_t *info, test_mech_t *m
 	}
 
 	message_length = MIN((int)global_message_length,
-		(int)((o->bits+7)/8 - 2*get_hash_length(mech->hash) - 2));
+		(int)(BYTES4BITS(o->bits) - 2 * get_hash_length(mech->hash) - 2));
 
 	/* will not work for 1024b RSA key and SHA512 hash: It has max size -2 */
 	if (message_length < 0) {
 		mech->usage_flags &= ~CKF_DECRYPT;
 		debug_print(" [SKIP %s ] Too small modulus (%ld bits)"
-			" or too large hash %s (%lu B) for OAEP", o->id_str,
+			" or too large hash %s (%zu B) for OAEP", o->id_str,
 			o->bits, get_mechanism_name(mech->hash),
 			get_hash_length(mech->hash));
 		return 0;
@@ -441,9 +538,10 @@ int oaep_encrypt_decrypt_test(test_cert_t *o, token_info_t *info, test_mech_t *m
 	return rv;
 }
 
-static int get_max_salt_len(unsigned long bits, CK_MECHANISM_TYPE hash)
+static unsigned long
+get_max_salt_len(unsigned long bits, CK_MECHANISM_TYPE hash)
 {
-	return (bits + 7)/8 - get_hash_length(hash) - 2;
+	return BYTES4BITS(bits) - get_hash_length(hash) - 2;
 }
 
 int fill_pss_params(CK_RSA_PKCS_PSS_PARAMS *pss_params,
@@ -454,12 +552,12 @@ int fill_pss_params(CK_RSA_PKCS_PSS_PARAMS *pss_params,
 	switch (mech->salt){
 	case -2:
 		/* max possible ( modlen - hashlen -2 ) */
-		pss_params->sLen = get_max_salt_len(o->bits,mech->hash);
+		pss_params->sLen = get_max_salt_len(o->bits, mech->hash);
 		break;
 	case -1:
 		/* digest length */
 		/* will not work with SHA512 and 1024b keys (max is 62b!) */
-		if ((int) get_hash_length(mech->hash) > get_max_salt_len(o->bits, mech->hash)) {
+		if (get_hash_length(mech->hash) > get_max_salt_len(o->bits, mech->hash)) {
 			return -1;
 		}
 		pss_params->sLen = get_hash_length(mech->hash);
@@ -523,44 +621,37 @@ int pss_sign_message(test_cert_t *o, token_info_t *info, CK_BYTE *message,
 
 	if (rv != CKR_OK) {
 		free(*sign);
+		*sign = NULL;
 		fprintf(stderr, "  C_Sign: rv = 0x%.8lX\n", rv);
 		return -1;
 	}
-	return sign_length;
+	return (int)sign_length;
 }
 
 int pss_verify_message_openssl(test_cert_t *o, token_info_t *info,
     CK_BYTE *message, CK_ULONG message_length, test_mech_t *mech,
     unsigned char *sign, CK_ULONG sign_length)
 {
-	CK_RV rv = -1;
+	int rv = -1;
 	EVP_PKEY_CTX *pctx = NULL;
 	const CK_BYTE *my_message;
+	CK_BYTE *free_message = NULL;
 	CK_ULONG my_message_length;
 	const EVP_MD *mgf_md = EVP_md_null();
 	const EVP_MD *md = EVP_md_null();
-	EVP_PKEY *key = NULL;
 
 	md = md_cryptoki_to_ossl(mech->hash);
 	mgf_md = mgf_cryptoki_to_ossl(mech->mgf);
 
 	if (mech->mech != CKM_RSA_PKCS_PSS) {
-		my_message = hash_message(message, message_length, mech->hash);
+		my_message = free_message = hash_message(message, message_length, mech->hash);
 		my_message_length = get_hash_length(mech->hash);
 	} else {
 		my_message = message;
 		my_message_length = message_length;
 	}
 
-	if ((key = EVP_PKEY_new()) == NULL
-		|| RSA_up_ref(o->key.rsa) < 1
-		|| EVP_PKEY_set1_RSA(key, o->key.rsa) != 1) {
-		fprintf(stderr, " [ ERROR %s ] Failed to initialize EVP_PKEY. Error: %s\n",
-			o->id_str, ERR_error_string(ERR_peek_last_error(), NULL));
-		goto out;
-	}
-
-	if ((pctx = EVP_PKEY_CTX_new(key, NULL)) == NULL
+	if ((pctx = EVP_PKEY_CTX_new(o->key, NULL)) == NULL
 		|| EVP_PKEY_verify_init(pctx) != 1
 		|| EVP_PKEY_CTX_set_rsa_padding(pctx, RSA_PKCS1_PSS_PADDING) != 1
 		|| EVP_PKEY_CTX_set_signature_md(pctx, md) != 1
@@ -581,8 +672,8 @@ int pss_verify_message_openssl(test_cert_t *o, token_info_t *info,
 		goto out;
 	}
 out:
+	free(free_message);
 	EVP_PKEY_CTX_free(pctx);
-	EVP_PKEY_free(key);
 	return rv;
 }
 
@@ -651,7 +742,7 @@ int pss_sign_verify_test(test_cert_t *o, token_info_t *info, test_mech_t *mech)
 		return 0;
 	}
 
-	if (o->type != EVP_PK_RSA) {
+	if (o->type != EVP_PKEY_RSA) {
 		debug_print(" [SKIP %s ] Skip non-RSA key", o->id_str);
 		return 0;
 	}
@@ -677,13 +768,17 @@ int pss_sign_verify_test(test_cert_t *o, token_info_t *info, test_mech_t *mech)
 		get_mgf_name(mech->mgf), mech->salt);
 	rv = pss_sign_message(o, info, message, message_length, mech, &sign);
 	if (rv <= 0) {
-		return rv;
+		goto out;
 	}
 	sign_length = (unsigned long) rv;
 
 	debug_print(" [ KEY %s ] Verify message signature", o->id_str);
 	rv = pss_verify_message(o, info, message, message_length, mech,
 		sign, sign_length);
+out:
+	if (mech->mech == CKM_RSA_PKCS_PSS) {
+		free(message);
+	}
 	free(sign);
 	return rv;
 }
@@ -702,7 +797,7 @@ void fill_object_pss_mechanisms(token_info_t *info, test_cert_t *o)
 		test_mech_t *source_mech = &token.rsa_mechs[j];
 
 		/* skip non-RSA-PSS mechs early */
-		if (!is_pss_mechanism(source_mech->mech) && 
+		if (!is_pss_mechanism(source_mech->mech) &&
 			source_mech->mech != CKM_RSA_PKCS_OAEP) {
 			continue;
 		}
@@ -726,10 +821,8 @@ void fill_object_pss_mechanisms(token_info_t *info, test_cert_t *o)
 					mech->usage_flags =
 						source_mech->usage_flags;
 					mech->result_flags = 0;
-					if (n >= MAX_MECHS)
-						P11TEST_FAIL(info,
-							"Too many mechanisms (%d)",
-							MAX_MECHS);
+					if (n >= MAX_PSS_MECHS)
+						P11TEST_FAIL(info, "Too many mechanisms (%d)", MAX_PSS_MECHS);
 				}
 			}
 		}
@@ -754,8 +847,11 @@ void pss_oaep_test(void **state) {
 
 	token_info_t *info = (token_info_t *) *state;
 	unsigned int i;
-	int used, j;
+	int used;
+	size_t j;
 	test_certs_t objects;
+
+	test_certs_init(&objects);
 
 	P11TEST_START(info);
 
@@ -764,11 +860,9 @@ void pss_oaep_test(void **state) {
 		skip();
 	}
 
-	objects.count = 0;
-	objects.data = NULL;
 	search_for_all_objects(&objects, info);
 
-	debug_print("\nCheck functionality of Sign&Verify and/or Encrypt&Decrypt");
+	debug_print("\nCheck functionality of Sign&Verify and/or Encrypt&Decrypt with RSA/OAEP mechanisms");
 	for (i = 0; i < objects.count; i++) {
 		test_cert_t *o = &objects.data[i];
 		/* do the Sign&Verify and/or Encrypt&Decrypt */
@@ -778,6 +872,10 @@ void pss_oaep_test(void **state) {
 				o->id_str);
 			continue;
 		}
+		/* Do not list non-RSA keys here */
+		if (o->type != EVP_PKEY_RSA)
+			continue;
+
 		fill_object_pss_mechanisms(info, o);
 		for (j = 0; j < o->num_mechs; j++)
 			if (o->mechs[j].mech != CKM_RSA_PKCS_OAEP)
@@ -802,8 +900,8 @@ void pss_oaep_test(void **state) {
 
 	/* print summary */
 	printf("[KEY ID] [LABEL]\n");
-	printf("[ TYPE ] [ SIZE ] [PUBLIC]                               [SIGN&VERIFY] [ENC&DECRYPT]\n");
-	printf("[ MECHANISM              ] [ HASH ] [    MGF    ] [SALT] [   WORKS   ] [   WORKS   ]\n");
+	printf("[ TYPE ] [ SIZE ] [PUBLIC]                                   [SIGN&VERIFY] [ENC&DECRYPT]\n");
+	printf("[ MECHANISM              ] [  HASH  ] [     MGF     ] [SALT] [   WORKS   ] [   WORKS   ]\n");
 	P11TEST_DATA_ROW(info, 7,
 		's', "KEY ID",
 		's', "MECHANISM",
@@ -820,36 +918,33 @@ void pss_oaep_test(void **state) {
 			continue;
 
 		/* Do not list non-RSA keys here */
-		if (o->type != EVP_PK_RSA)
+		if (o->type != EVP_PKEY_RSA)
 			continue;
 
 		printf("\n[%-6s] [%s]\n",
 			o->id_str,
 			o->label);
-		printf("[ %s ] [%6lu] [ %s ]                               [%s%s] [%s%s]\n",
-			o->key_type == CKK_RSA ? "RSA " :
-				o->key_type == CKK_EC ? " EC " : " ?? ",
-			o->bits,
-			o->verify_public == 1 ? " ./ " : "    ",
-			o->sign ? "[./] " : "[  ] ",
-			o->verify ? " [./] " : " [  ] ",
-			o->encrypt ? "[./] " : "[  ] ",
-			o->decrypt ? " [./] " : " [  ] ");
+		printf("[ %s ] [%6lu] [ %s ]                                   [%s%s] [%s%s]\n",
+				o->key_type == CKK_RSA ? "RSA " : " ?? ",
+				o->bits,
+				o->verify_public == 1 ? " ./ " : "    ",
+				o->sign ? "[./] " : "[  ] ",
+				o->verify ? " [./] " : " [  ] ",
+				o->encrypt ? "[./] " : "[  ] ",
+				o->decrypt ? " [./] " : " [  ] ");
 		if (!o->sign && !o->verify && !o->encrypt && !o->decrypt) {
 			printf("  no usable attributes found ... ignored\n");
 			continue;
 		}
 		for (j = 0; j < o->num_mechs; j++) {
 			test_mech_t *mech = &o->mechs[j];
-			printf("  [ %-20s ] [%-6s] [%-11s] [%4d] [   %s    ] [   %s    ]\n",
-				get_mechanism_name(mech->mech),
-				get_mechanism_name(mech->hash),
-				get_mgf_name(mech->mgf),
-				mech->salt,
-				mech->result_flags & FLAGS_SIGN_ANY
-				? "[./]" : "    ",
-				mech->result_flags & FLAGS_DECRYPT_ANY
-				? "[./]" : "    ");
+			printf("  [ %-20s ] [%-8s] [%-13s] [%4d] [   %s    ] [   %s    ]\n",
+					get_mechanism_name(mech->mech),
+					get_mechanism_name(mech->hash),
+					get_mgf_name(mech->mgf),
+					mech->salt,
+					mech->result_flags & FLAGS_SIGN_ANY ? "[./]" : "    ",
+					mech->result_flags & FLAGS_DECRYPT_ANY ? "[./]" : "    ");
 			if ((mech->result_flags & FLAGS_SIGN_ANY) == 0 &&
 				(mech->result_flags & FLAGS_DECRYPT_ANY) == 0)
 				continue; /* skip empty rows for export */
@@ -865,13 +960,13 @@ void pss_oaep_test(void **state) {
 				? "YES" : "");
 		}
 	}
-	printf(" Public == Cert ----------^                                ^  ^  ^       ^  ^  ^\n");
-	printf(" Sign Attribute -------------------------------------------'  |  |       |  |  |\n");
-	printf(" Sign&Verify functionality -----------------------------------'  |       |  |  |\n");
-	printf(" Verify Attribute -----------------------------------------------'       |  |  |\n");
-	printf(" Encrypt Attribute ------------------------------------------------------'  |  |\n");
-	printf(" Encrypt & Decrypt functionality -------------------------------------------'  |\n");
-	printf(" Decrypt Attribute ------------------------------------------------------------'\n");
+	printf(" Public == Cert ----------^                                    ^  ^  ^       ^  ^  ^\n");
+	printf(" Sign Attribute -----------------------------------------------'  |  |       |  |  |\n");
+	printf(" Sign&Verify functionality ---------------------------------------'  |       |  |  |\n");
+	printf(" Verify Attribute ---------------------------------------------------'       |  |  |\n");
+	printf(" Encrypt Attribute ----------------------------------------------------------'  |  |\n");
+	printf(" Encrypt & Decrypt functionality -----------------------------------------------'  |\n");
+	printf(" Decrypt Attribute ----------------------------------------------------------------'\n");
 
 	clean_all_objects(&objects);
 	P11TEST_PASS(info);

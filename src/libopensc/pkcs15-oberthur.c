@@ -19,7 +19,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
 #ifdef HAVE_CONFIG_H
@@ -38,7 +38,6 @@
 
 #ifdef ENABLE_OPENSSL
 #include <openssl/bio.h>
-#include <openssl/crypto.h>
 #include <openssl/x509.h>
 #include <openssl/x509v3.h>
 #endif
@@ -185,7 +184,7 @@ sc_oberthur_get_friends (unsigned int id, struct crypto_container *ccont)
 
 
 static int
-sc_oberthur_get_certificate_authority(struct sc_pkcs15_der *der, int *out_authority)
+sc_oberthur_get_certificate_authority(sc_context_t *ctx, struct sc_pkcs15_der *der, int *out_authority)
 {
 #ifdef ENABLE_OPENSSL
 	X509	*x;
@@ -206,6 +205,7 @@ sc_oberthur_get_certificate_authority(struct sc_pkcs15_der *der, int *out_author
 	bio = BIO_new(BIO_s_mem());
 	if (!bio) {
 		free(buf_mem.data);
+		sc_log_openssl(ctx);
 		return SC_ERROR_OUT_OF_MEMORY;
 	}
 
@@ -213,8 +213,10 @@ sc_oberthur_get_certificate_authority(struct sc_pkcs15_der *der, int *out_author
 	x = d2i_X509_bio(bio, 0);
 	free(buf_mem.data);
 	BIO_free(bio);
-	if (!x)
+	if (!x) {
+		sc_log_openssl(ctx);
 		return SC_ERROR_INVALID_DATA;
+	}
 
 	bs = (BASIC_CONSTRAINTS *)X509_get_ext_d2i(x, NID_basic_constraints, NULL, NULL);
 	if (out_authority)
@@ -262,7 +264,7 @@ sc_oberthur_read_file(struct sc_pkcs15_card *p15card, const char *in_path,
 	else
 		sz = (file->record_length + 2) * file->record_count;
 
-	*out = calloc(sz, 1);
+	*out = calloc(1, sz);
 	if (*out == NULL) {
 		sc_file_free(file);
 		LOG_TEST_RET(ctx, SC_ERROR_OUT_OF_MEMORY, "Cannot read oberthur file");
@@ -272,7 +274,7 @@ sc_oberthur_read_file(struct sc_pkcs15_card *p15card, const char *in_path,
 		rv = sc_read_binary(card, 0, *out, sz, 0);
 	}
 	else	{
-		size_t rec;
+		unsigned int rec;
 		size_t offs = 0;
 		size_t rec_len = file->record_length;
 
@@ -281,7 +283,7 @@ sc_oberthur_read_file(struct sc_pkcs15_card *p15card, const char *in_path,
 				rv = 0;
 				break;
 			}
-			rv = sc_read_record(card, rec, *out + offs + 2, rec_len, SC_RECORD_BY_REC_NR);
+			rv = sc_read_record(card, rec, 0, *out + offs + 2, rec_len, SC_RECORD_BY_REC_NR);
 			if (rv == SC_ERROR_RECORD_NOT_FOUND)   {
 				rv = 0;
 				break;
@@ -419,7 +421,7 @@ sc_oberthur_parse_containers (struct sc_pkcs15_card *p15card,
 		if (*(buff + offs) != 'R')
 			return SC_ERROR_INVALID_DATA;
 
-		cont = (struct container *)calloc(sizeof(struct container), 1);
+		cont = (struct container *)calloc(1, sizeof(struct container));
 		if (!cont)
 			return SC_ERROR_OUT_OF_MEMORY;
 
@@ -732,7 +734,7 @@ sc_pkcs15emu_oberthur_add_cert(struct sc_pkcs15_card *p15card, unsigned int file
 	cinfo.value.value = cert_blob;
 	cinfo.value.len = cert_len;
 
-	rv = sc_oberthur_get_certificate_authority(&cinfo.value, &cinfo.authority);
+	rv = sc_oberthur_get_certificate_authority(ctx, &cinfo.value, &cinfo.authority);
 	if (rv != SC_SUCCESS) {
 		free(cinfo.value.value);
 		LOG_TEST_RET(ctx, rv, "Failed to add certificate: get certificate attributes error");
@@ -1033,7 +1035,7 @@ sc_pkcs15emu_oberthur_init(struct sc_pkcs15_card * p15card)
 
 	sc_format_path(AWP_PIN_DF, &path);
 	rv = sc_select_file(card, &path, NULL);
-	LOG_TEST_RET(ctx, rv, "Oberthur init failed: cannot select PIN dir");
+	LOG_TEST_GOTO_ERR(ctx, rv, "Oberthur init failed: cannot select PIN dir");
 
 	tries_left = -1;
 	rv = sc_verify(card, SC_AC_CHV, sopin_reference, (unsigned char *)"", 0, &tries_left);
@@ -1042,7 +1044,7 @@ sc_pkcs15emu_oberthur_init(struct sc_pkcs15_card * p15card)
 		rv = sc_verify(card, SC_AC_CHV, sopin_reference, (unsigned char *)"", 0, &tries_left);
 	}
 	if (rv && rv != SC_ERROR_PIN_CODE_INCORRECT)
-		LOG_TEST_RET(ctx, rv, "Invalid state of SO-PIN");
+		LOG_TEST_GOTO_ERR(ctx, rv, "Invalid state of SO-PIN");
 
 	/* add PIN */
 	memset(&auth_info, 0, sizeof(auth_info));
@@ -1071,7 +1073,7 @@ sc_pkcs15emu_oberthur_init(struct sc_pkcs15_card * p15card)
 	sc_log(ctx, "Add PIN(%s,auth_id:%s,reference:%i)", obj.label,
 			sc_pkcs15_print_id(&auth_info.auth_id), auth_info.attrs.pin.reference);
 	rv = sc_pkcs15emu_add_pin_obj(p15card, &obj, &auth_info);
-	LOG_TEST_RET(ctx, rv, "Oberthur init failed: cannot add PIN object");
+	LOG_TEST_GOTO_ERR(ctx, rv, "Oberthur init failed: cannot add PIN object");
 
 	tries_left = -1;
 	rv = sc_verify(card, SC_AC_CHV, 0x81, (unsigned char *)"", 0, &tries_left);
@@ -1115,10 +1117,10 @@ sc_pkcs15emu_oberthur_init(struct sc_pkcs15_card * p15card)
 		sc_log(ctx, "Add PIN(%s,auth_id:%s,reference:%i)", obj.label,
 				sc_pkcs15_print_id(&auth_info.auth_id), auth_info.attrs.pin.reference);
 		rv = sc_pkcs15emu_add_pin_obj(p15card, &obj, &auth_info);
-		LOG_TEST_RET(ctx, rv, "Oberthur init failed: cannot add PIN object");
+		LOG_TEST_GOTO_ERR(ctx, rv, "Oberthur init failed: cannot add PIN object");
 	}
 	else if (rv != SC_ERROR_DATA_OBJECT_NOT_FOUND)    {
-		LOG_TEST_RET(ctx, rv, "Oberthur init failed: cannot verify PIN");
+		LOG_TEST_GOTO_ERR(ctx, rv, "Oberthur init failed: cannot verify PIN");
 	}
 
 	for (ii=0; oberthur_infos[ii].name; ii++)   {
@@ -1126,17 +1128,21 @@ sc_pkcs15emu_oberthur_init(struct sc_pkcs15_card * p15card)
 		free(oberthur_infos[ii].content);
 		rv = sc_oberthur_read_file(p15card, oberthur_infos[ii].path,
 				&oberthur_infos[ii].content, &oberthur_infos[ii].len, 1);
-		LOG_TEST_RET(ctx, rv, "Oberthur init failed: read oberthur file error");
+		LOG_TEST_GOTO_ERR(ctx, rv, "Oberthur init failed: read oberthur file error");
 
 		sc_log(ctx,
 		       "Oberthur init: parse %s file, content length %"SC_FORMAT_LEN_SIZE_T"u",
 		       oberthur_infos[ii].name, oberthur_infos[ii].len);
 		rv = oberthur_infos[ii].parser(p15card, oberthur_infos[ii].content, oberthur_infos[ii].len,
 				oberthur_infos[ii].postpone_allowed);
-		LOG_TEST_RET(ctx, rv, "Oberthur init failed: parse error");
+		LOG_TEST_GOTO_ERR(ctx, rv, "Oberthur init failed: parse error");
 	}
 
 	LOG_FUNC_RETURN(ctx, SC_SUCCESS);
+
+err:
+	sc_pkcs15_card_clear(p15card);
+	LOG_FUNC_RETURN(ctx, rv);
 }
 
 

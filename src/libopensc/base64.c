@@ -15,10 +15,10 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#if HAVE_CONFIG_H
+#ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
 
@@ -52,29 +52,28 @@ static const u8 bin_table[128] = {
         0x31,0x32,0x33,0xFF,0xFF,0xFF,0xFF,0xFF,
 };
 
-static void to_base64(unsigned int i, u8 *out, unsigned int fillers)
+static void to_base64(unsigned int i, u8 *out, size_t fillers)
 {
-	unsigned int s = 18, c;
-	
-	for (c = 0; c < 4; c++) {
+	unsigned int s, c;
+
+	for (c = 0, s = 18; c < 4; c++, s -= 6) {
 		if (fillers >= 4 - c)
 			*out = base64_table[64];
 		else
 			*out = base64_table[(i >> s) & 0x3f];
 		out++;
-		s -= 6;
 	}
 }
 
-static int from_base64(const char *in, unsigned int *out, int *skip)
+static int from_base64(const char *in, unsigned int *out, size_t *skip)
 {
 	unsigned int res = 0, c, s = 18;
 	const char *in0 = in;
-	
+
 	for (c = 0; c < 4; c++, in++) {
 		u8 b;
 		int k = *in;
-		
+
 		if (k < 0 || k >= (int)sizeof(bin_table))
 			return -1;
 		if (k == 0 && c == 0)
@@ -129,7 +128,7 @@ int sc_base64_encode(const u8 *in, size_t len, u8 *out, size_t outlen, size_t li
 	if (len) {
 		if (outlen < 4)
 			return SC_ERROR_BUFFER_TOO_SMALL;
-		to_base64(i, out, 3-len);
+		to_base64(i, out, 3 - len);
 		out += 4;
 		outlen -= 4;
 		chars += 4;
@@ -150,8 +149,9 @@ int sc_base64_encode(const u8 *in, size_t len, u8 *out, size_t outlen, size_t li
 
 int sc_base64_decode(const char *in, u8 *out, size_t outlen)
 {
-	int len = 0, r, skip;
-	unsigned int i;
+	int len = 0, r = 0;
+	size_t skip = 0;
+	unsigned int i = 0;
 
 	while ((r = from_base64(in, &i, &skip)) > 0) {
 		int finished = 0, s = 16;

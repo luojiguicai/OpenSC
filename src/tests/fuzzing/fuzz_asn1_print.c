@@ -13,17 +13,19 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#if HAVE_CONFIG_H
+#ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
 
 #include "libopensc/asn1.h"
 
 int LLVMFuzzerTestOneInput(const uint8_t *Data, size_t Size) {
+#ifdef FUZZING_ENABLED
     fclose(stdout);
+#endif
     sc_asn1_print_tags(Data, Size);
     return 0;
 }

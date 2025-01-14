@@ -31,7 +31,8 @@
 #include "pkcs11/pkcs11.h"
 #include "libopensc/sc-ossl-compat.h"
 
-#define MAX_MECHS 200
+#define MAX_MECHS     256
+#define MAX_PSS_MECHS 1024
 
 #define debug_print(fmt, ...) \
 	do { \
@@ -40,13 +41,17 @@
 		} \
 	} while (0)
 
-#define FLAGS_SIGN		0x01
-#define FLAGS_SIGN_OPENSSL	0x02
+#define FLAGS_SIGN		0x001
+#define FLAGS_SIGN_OPENSSL	0x002
 #define FLAGS_SIGN_ANY		( FLAGS_SIGN | FLAGS_SIGN_OPENSSL )
-#define FLAGS_DECRYPT		0x04
-#define FLAGS_DECRYPT_OPENSSL	0x08
+#define FLAGS_DECRYPT		0x004
+#define FLAGS_DECRYPT_OPENSSL	0x008
 #define FLAGS_DECRYPT_ANY	( FLAGS_DECRYPT | FLAGS_DECRYPT_OPENSSL )
-#define FLAGS_DERIVE		0x10
+#define FLAGS_DERIVE		0x010
+#define FLAGS_WRAP		0x020
+#define FLAGS_WRAP_SYM		0x040
+#define FLAGS_UNWRAP		0x080
+#define FLAGS_UNWRAP_SYM	0x100
 
 typedef struct {
 	char *outfile;
@@ -59,10 +64,14 @@ typedef struct {
 
 typedef struct {
 	CK_MECHANISM_TYPE mech;
+	/* RSA-PSS parameters */
 	CK_MECHANISM_TYPE hash;
 	CK_RSA_PKCS_MGF_TYPE mgf;
 	int salt;
-	int usage_flags;
+	/* generic parameters used for example for secret keys */
+	void *params;
+	unsigned long params_len;
+	unsigned long usage_flags;
 	int result_flags;
 } test_mech_t;
 
@@ -76,6 +85,9 @@ typedef struct {
 	unsigned int interactive;
 	log_context_t log;
 
+	int verify_support;
+	int encrypt_support;
+
 	test_mech_t rsa_mechs[MAX_MECHS];
 	size_t  num_rsa_mechs;
 	test_mech_t	ec_mechs[MAX_MECHS];
@@ -84,6 +96,8 @@ typedef struct {
 	size_t  num_ed_mechs;
 	test_mech_t	montgomery_mechs[MAX_MECHS];
 	size_t  num_montgomery_mechs;
+	test_mech_t	aes_mechs[MAX_MECHS];
+	size_t  num_aes_mechs;
 	test_mech_t	keygen_mechs[MAX_MECHS];
 	size_t  num_keygen_mechs;
 } token_info_t;

@@ -15,7 +15,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
 #ifndef SC_HSM_H_
@@ -40,15 +40,21 @@
 #define ALGO_RSA_PKCS1			0x30		/* RSA signature with DigestInfo input and PKCS#1 V1.5 padding */
 #define ALGO_RSA_PKCS1_SHA1		0x31		/* RSA signature with SHA-1 hash and PKCS#1 V1.5 padding */
 #define ALGO_RSA_PKCS1_SHA256	0x33		/* RSA signature with SHA-256 hash and PKCS#1 V1.5 padding */
+#define ALGO_RSA_PKCS1_SHA384	0x34		/* RSA signature with SHA-384 hash and PKCS#1 V1.5 padding */
+#define ALGO_RSA_PKCS1_SHA512	0x35		/* RSA signature with SHA-512 hash and PKCS#1 V1.5 padding */
 
 #define ALGO_RSA_PSS			0x40		/* RSA signature with external hash and PKCS#1 PSS padding*/
 #define ALGO_RSA_PSS_SHA1		0x41		/* RSA signature with SHA-1 hash and PKCS#1 PSS padding */
 #define ALGO_RSA_PSS_SHA256		0x43		/* RSA signature with SHA-256 hash and PKCS#1 PSS padding */
+#define ALGO_RSA_PSS_SHA384		0x44		/* RSA signature with SHA-384 hash and PKCS#1 PSS padding */
+#define ALGO_RSA_PSS_SHA512		0x45		/* RSA signature with SHA-512 hash and PKCS#1 PSS padding */
 
 #define ALGO_EC_RAW				0x70		/* ECDSA signature with hash input */
 #define ALGO_EC_SHA1			0x71		/* ECDSA signature with SHA-1 hash */
 #define ALGO_EC_SHA224			0x72		/* ECDSA signature with SHA-224 hash */
 #define ALGO_EC_SHA256			0x73		/* ECDSA signature with SHA-256 hash */
+#define ALGO_EC_SHA384			0x74		/* ECDSA signature with SHA-384 hash */
+#define ALGO_EC_SHA512			0x75		/* ECDSA signature with SHA-512 hash */
 #define ALGO_EC_DH				0x80		/* ECDH key derivation */
 
 #define ID_USER_PIN				0x81		/* User PIN identifier */
@@ -74,6 +80,7 @@ typedef struct sc_hsm_private_data {
 struct sc_cvc {
 	int cpi;							// Certificate profile indicator (0)
 	char car[17];						// Certification authority reference
+	size_t carLen;						// strlen of car
 
 	struct sc_object_id pukoid;			// Public key algorithm object identifier
 	u8 *primeOrModulus;					// Prime for ECC or modulus for RSA
@@ -94,11 +101,14 @@ struct sc_cvc {
 	int modulusSize;					// Size of RSA modulus in bits
 
 	char chr[21];						// Certificate holder reference
+	size_t chrLen;						// strlen of chr
 
 	u8 *signature;						// Certificate signature or request self-signed signature
 	size_t signatureLen;
 
 	char outer_car[17];					// Instance signing the request
+	size_t outerCARLen;					// strlen of outer_car
+
 	u8 *outerSignature;					// Request authenticating signature
 	size_t outerSignatureLen;
 };
@@ -116,15 +126,29 @@ struct ec_curve {
 	const struct sc_lv_data coFactor;
 };
 
+typedef struct sc_cvc_pka_component {
+	sc_cvc_t cvc;
+	const u8 *ptr; /* don't free, this points to the middle of a buffer */
+	size_t len;
+} sc_cvc_pka_component_t;
 
+typedef struct sc_cvc_pka {
+	sc_cvc_pka_component_t public_key_req;	/* CVC request with public key */
+	sc_cvc_pka_component_t device;			/* device CVC*/
+	sc_cvc_pka_component_t dica;			/* device issuer CA CVC */
+} sc_cvc_pka_t;
 
 int sc_pkcs15emu_sc_hsm_decode_cvc(sc_pkcs15_card_t * p15card,
 											const u8 ** buf, size_t *buflen,
 											sc_cvc_t *cvc);
+int sc_pkcs15emu_sc_hsm_decode_pka(sc_pkcs15_card_t * p15card,
+	const u8 **buf, size_t *buflen,
+	sc_cvc_pka_t *pka);
 int sc_pkcs15emu_sc_hsm_encode_cvc(sc_pkcs15_card_t * p15card,
 		sc_cvc_t *cvc,
 		u8 ** buf, size_t *buflen);
 void sc_pkcs15emu_sc_hsm_free_cvc(sc_cvc_t *cvc);
+void sc_pkcs15emu_sc_hsm_free_cvc_pka(sc_cvc_pka_t *pka);
 int sc_pkcs15emu_sc_hsm_get_curve(struct ec_curve **curve, u8 *oid, size_t oidlen);
 int sc_pkcs15emu_sc_hsm_get_public_key(struct sc_context *ctx, sc_cvc_t *cvc, struct sc_pkcs15_pubkey *pubkey);
 
