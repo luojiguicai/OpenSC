@@ -15,10 +15,10 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#if HAVE_CONFIG_H
+#ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
 
@@ -45,7 +45,8 @@ asn1_decode_des_params(sc_context_t *ctx, void **paramp,
 {
 	struct sc_asn1_entry asn1_des_iv[2];
 	u8	iv[8];
-	int	ivlen = 8, r;
+	size_t ivlen = 8;
+	int r;
 
 	sc_copy_asn1_entry(c_asn1_des_iv, asn1_des_iv);
 	sc_format_asn1_entry(asn1_des_iv + 0, iv, &ivlen, 0);
@@ -285,7 +286,7 @@ asn1_decode_ec_params(sc_context_t *ctx, void **paramp,
 	if (r < 0)
 		return r;
 
-	ecp = calloc(sizeof(struct sc_ec_parameters), 1);
+	ecp = calloc(1, sizeof(struct sc_ec_parameters));
 	if (ecp == NULL)
 		return SC_ERROR_OUT_OF_MEMORY;
 
@@ -346,119 +347,136 @@ asn1_free_ec_params(void *params)
 	}
 }
 
-
 static struct sc_asn1_pkcs15_algorithm_info algorithm_table[] = {
 #ifdef SC_ALGORITHM_SHA1
-	/* hmacWithSHA1 */
-	{ SC_ALGORITHM_SHA1, {{ 1, 2, 840, 113549, 2, 7, -1}}, NULL, NULL, NULL },
-	{ SC_ALGORITHM_SHA1, {{ 1, 3, 6, 1, 5, 5, 8, 1, 2, -1}}, NULL, NULL, NULL },
-	/* SHA1 */
-	{ SC_ALGORITHM_SHA1, {{ 1, 3, 14, 3, 2, 26, -1}}, NULL, NULL, NULL },
+		/* hmacWithSHA1 */
+		{SC_ALGORITHM_SHA1, {{1, 2, 840, 113549, 2, 7, -1}}, NULL, NULL, NULL},
+		{SC_ALGORITHM_SHA1, {{1, 3, 6, 1, 5, 5, 8, 1, 2, -1}}, NULL, NULL, NULL},
+		/* SHA1 */
+		{SC_ALGORITHM_SHA1, {{1, 3, 14, 3, 2, 26, -1}}, NULL, NULL, NULL},
 #endif
 #ifdef SC_ALGORITHM_MD5
-	{ SC_ALGORITHM_MD5, {{ 1, 2, 840, 113549, 2, 5, -1}}, NULL, NULL, NULL },
-#endif
-#ifdef SC_ALGORITHM_DSA
-	{ SC_ALGORITHM_DSA, {{ 1, 2, 840, 10040, 4, 3, -1}}, NULL, NULL, NULL },
+		{SC_ALGORITHM_MD5, {{1, 2, 840, 113549, 2, 5, -1}}, NULL, NULL, NULL},
 #endif
 #ifdef SC_ALGORITHM_RSA /* really rsaEncryption */
-	{ SC_ALGORITHM_RSA, {{ 1, 2, 840, 113549, 1, 1, 1, -1}}, NULL, NULL, NULL },
+		{SC_ALGORITHM_RSA, {{1, 2, 840, 113549, 1, 1, 1, -1}}, NULL, NULL, NULL},
 #endif
 #ifdef SC_ALGORITHM_DH
-	{ SC_ALGORITHM_DH, {{ 1, 2, 840, 10046, 2, 1, -1}}, NULL, NULL, NULL },
+		{SC_ALGORITHM_DH, {{1, 2, 840, 10046, 2, 1, -1}}, NULL, NULL, NULL},
 #endif
 #ifdef SC_ALGORITHM_RC2_WRAP /* from CMS */
-	{ SC_ALGORITHM_RC2_WRAP,  {{ 1, 2, 840, 113549, 1, 9, 16, 3, 7, -1}}, NULL, NULL, NULL },
+		{SC_ALGORITHM_RC2_WRAP, {{1, 2, 840, 113549, 1, 9, 16, 3, 7, -1}}, NULL, NULL, NULL},
 #endif
 #ifdef SC_ALGORITHM_RC2 /* CBC mode */
-	{ SC_ALGORITHM_RC2, {{ 1, 2, 840, 113549, 3, 2, -1}},
+		{SC_ALGORITHM_RC2, {{1, 2, 840, 113549, 3, 2, -1}},
 			asn1_decode_rc2_params,
-			asn1_encode_rc2_params },
+			asn1_encode_rc2_params},
 #endif
 #ifdef SC_ALGORITHM_DES /* CBC mode */
-	{ SC_ALGORITHM_DES, {{ 1, 3, 14, 3, 2, 7, -1}},
+		{SC_ALGORITHM_DES, {{1, 3, 14, 3, 2, 7, -1}},
 			asn1_decode_des_params,
 			asn1_encode_des_params,
-			free },
+			free},
 #endif
 #ifdef SC_ALGORITHM_3DES_WRAP /* from CMS */
-	{ SC_ALGORITHM_3DES_WRAP, {{ 1, 2, 840, 113549, 1, 9, 16, 3, 6, -1}}, NULL, NULL, NULL },
+		{SC_ALGORITHM_3DES_WRAP, {{1, 2, 840, 113549, 1, 9, 16, 3, 6, -1}}, NULL, NULL, NULL},
 #endif
 #ifdef SC_ALGORITHM_3DES /* EDE CBC mode */
-	{ SC_ALGORITHM_3DES, {{ 1, 2, 840, 113549, 3, 7, -1}},
+		{SC_ALGORITHM_3DES, {{1, 2, 840, 113549, 3, 7, -1}},
 			asn1_decode_des_params,
 			asn1_encode_des_params,
-			free },
+			free},
 #endif
 #ifdef SC_ALGORITHM_GOST /* EDE CBC mode */
-	{ SC_ALGORITHM_GOST, {{ 1, 2, 4434, 66565, 3, 7, -1}}, NULL, NULL, NULL },
+		{SC_ALGORITHM_GOST, {{1, 2, 4434, 66565, 3, 7, -1}}, NULL, NULL, NULL},
 #endif
 #ifdef SC_ALGORITHM_GOSTR3410
-	{ SC_ALGORITHM_GOSTR3410, {{ 1, 2, 643, 2, 2, 19, -1}},
+		{SC_ALGORITHM_GOSTR3410, {{1, 2, 643, 2, 2, 19, -1}},
 			asn1_decode_gostr3410_params,
 			asn1_encode_gostr3410_params,
-			NULL },
+			NULL},
 #endif
 /* We do not support PBES1 because the encryption is weak */
 #ifdef SC_ALGORITHM_PBKDF2
-	{ SC_ALGORITHM_PBKDF2, {{ 1, 2, 840, 113549, 1, 5, 12, -1}},
+		{SC_ALGORITHM_PBKDF2, {{1, 2, 840, 113549, 1, 5, 12, -1}},
 			asn1_decode_pbkdf2_params,
 			asn1_encode_pbkdf2_params,
-			free },
+			free},
 #endif
 #ifdef SC_ALGORITHM_PBES2
-	{ SC_ALGORITHM_PBES2, {{ 1, 2, 840, 113549, 1, 5, 13, -1}},
+		{SC_ALGORITHM_PBES2, {{1, 2, 840, 113549, 1, 5, 13, -1}},
 			asn1_decode_pbes2_params,
 			asn1_encode_pbes2_params,
-			asn1_free_pbes2_params },
+			asn1_free_pbes2_params},
 #endif
 #ifdef SC_ALGORITHM_EC
-	{ SC_ALGORITHM_EC, {{ 1, 2, 840, 10045, 2, 1, -1}},
+		{SC_ALGORITHM_EC, {{1, 2, 840, 10045, 2, 1, -1}},
 			asn1_decode_ec_params,
 			asn1_encode_ec_params,
-			asn1_free_ec_params },
+			asn1_free_ec_params},
 #endif
-/* TODO: -DEE Not clear if we need the next five or not */
 #ifdef SC_ALGORITHM_ECDSA_SHA1
-	/* Note RFC 3279 says no ecParameters */
-	{ SC_ALGORITHM_ECDSA_SHA1, {{ 1, 2, 840, 10045, 4, 1, -1}}, NULL, NULL, NULL},
+		/* Note RFC 3279 says no ecParameters */
+		{SC_ALGORITHM_ECDSA_SHA1, {{1, 2, 840, 10045, 4, 1, -1}}, NULL, NULL, NULL},
 #endif
 #ifdef SC_ALGORITHM_ECDSA_SHA224
-/* These next 4 are defined in RFC 5758 */
-	{ SC_ALGORITHM_ECDSA_SHA224, {{ 1, 2, 840, 10045, 4, 3, 1, -1}},
+		/* These next 4 are defined in RFC 5758 */
+		{SC_ALGORITHM_ECDSA_SHA224, {{1, 2, 840, 10045, 4, 3, 1, -1}},
 			asn1_decode_ec_params,
 			asn1_encode_ec_params,
-			asn1_free_ec_params },
+			asn1_free_ec_params},
 #endif
 #ifdef SC_ALGORITHM_ECDSA_SHA256
-	{ SC_ALGORITHM_ECDSA_SHA256, {{ 1, 2, 840, 10045, 4, 3, 2, -1}},
+		{SC_ALGORITHM_ECDSA_SHA256, {{1, 2, 840, 10045, 4, 3, 2, -1}},
 			asn1_decode_ec_params,
 			asn1_encode_ec_params,
-			asn1_free_ec_params },
+			asn1_free_ec_params},
 #endif
 #ifdef SC_ALGORITHM_ECDSA_SHA384
-	{ SC_ALGORITHM_ECDSA_SHA384, {{ 1, 2, 840, 10045, 4, 3, 3, -1}},
+		{SC_ALGORITHM_ECDSA_SHA384, {{1, 2, 840, 10045, 4, 3, 3, -1}},
 			asn1_decode_ec_params,
 			asn1_encode_ec_params,
-			asn1_free_ec_params },
+			asn1_free_ec_params},
 #endif
 #ifdef SC_ALGORITHM_ECDSA_SHA512
-	{ SC_ALGORITHM_ECDSA_SHA512, {{ 1, 2, 840, 10045, 4, 3, 4, -1}},
+		{SC_ALGORITHM_ECDSA_SHA512, {{1, 2, 840, 10045, 4, 3, 4, -1}},
 			asn1_decode_ec_params,
 			asn1_encode_ec_params,
-			asn1_free_ec_params },
+			asn1_free_ec_params},
 #endif
 #ifdef SC_ALGORITHM_EDDSA
-	/* aka Ed25519 */
-	/* RFC 8410, needed to parse/create X509 certs/pubkeys */
-	{ SC_ALGORITHM_EDDSA, {{1, 3, 101, 112, -1}}, NULL, NULL, NULL },
+		/* aka Ed25519 */
+		/* RFC 8410, needed to parse/create X509 certs/pubkeys  */
+		{SC_ALGORITHM_EDDSA, {{1, 3, 101, 112, -1}},
+			asn1_decode_ec_params,
+			asn1_encode_ec_params,
+			asn1_free_ec_params}, /* Ed25119 */
+		{SC_ALGORITHM_EDDSA, {{1, 3, 6, 1, 4, 1, 11591, 15, 1, -1}},
+			asn1_decode_ec_params,
+			asn1_encode_ec_params,
+			asn1_free_ec_params}, /* Ed25519 OID used by OpenPGP */
+		{SC_ALGORITHM_EDDSA, {{1, 3, 101, 113, -1}},
+			asn1_decode_ec_params,
+			asn1_encode_ec_params,
+			asn1_free_ec_params}, /* Ed448 */
 #endif
 #ifdef SC_ALGORITHM_XEDDSA
-	/* aka curve25519 */
-	/* RFC 8410, needed to parse/create X509 certs/pubkeys */
-	{ SC_ALGORITHM_XEDDSA, {{1, 3, 101, 110, -1}}, NULL, NULL, NULL },
+		/* aka curve25519 */
+		/* RFC 8410, needed to parse/create X509 certs/pubkeys  ec_parms*/
+		{SC_ALGORITHM_XEDDSA, {{1, 3, 101, 110, -1}},
+			asn1_decode_ec_params,
+			asn1_encode_ec_params,
+			asn1_free_ec_params}, /* X25519 */
+		{SC_ALGORITHM_XEDDSA, {{1, 3, 6, 1, 4, 1, 3029, 1, 5, 1 - 1}},
+			asn1_decode_ec_params,
+			asn1_encode_ec_params,
+			asn1_free_ec_params}, /* X25519 OID used by OpenPGP */
+		{SC_ALGORITHM_XEDDSA, {{1, 3, 101, 111, -1}},
+			asn1_decode_ec_params,
+			asn1_encode_ec_params,
+			asn1_free_ec_params}, /* X448 */
 #endif
-	{ -1, {{ -1 }}, NULL, NULL, NULL }
+		{-1, {{-1}}, NULL, NULL, NULL}
 };
 
 
@@ -535,10 +553,10 @@ sc_asn1_encode_algorithm_id(struct sc_context *ctx, u8 **buf, size_t *len,
 	u8 *tmp;
 
 	LOG_FUNC_CALLED(ctx);
-        sc_log(ctx, "type of algorithm to encode: %i", id->algorithm);
+        sc_log(ctx, "type of algorithm to encode: %lu", id->algorithm);
 	alg_info = sc_asn1_get_algorithm_info(id);
 	if (alg_info == NULL) {
-		sc_log(ctx, "Cannot encode unknown algorithm %u", id->algorithm);
+		sc_log(ctx, "Cannot encode unknown algorithm %lu", id->algorithm);
 		LOG_FUNC_RETURN(ctx, SC_ERROR_INVALID_ARGUMENTS);
 	}
 
@@ -556,6 +574,7 @@ sc_asn1_encode_algorithm_id(struct sc_context *ctx, u8 **buf, size_t *len,
 	/* no parameters, write NULL tag */
 	/* If it's EDDSA/XEDDSA, according to RFC8410, params
 	 * MUST be absent */
+	/* PKCS11 3.0 list them under ec_params */
 	if (id->algorithm != SC_ALGORITHM_EDDSA &&
 	    id->algorithm != SC_ALGORITHM_XEDDSA &&
 	    (!id->params || !alg_info->encode))

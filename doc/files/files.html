@@ -1,4 +1,4 @@
-<html><head><meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1"><title>OpenSC Manual Pages: Section 5</title><meta name="generator" content="DocBook XSL Stylesheets V1.79.1"><style type="text/css"><!--
+<html><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8"><title>OpenSC Manual Pages: Section 5</title><meta name="generator" content="DocBook XSL Stylesheets Vsnapshot"><style type="text/css"><!--
 			body {
   font-family: Verdana, Arial;
   font-size: 0.9em;
@@ -43,7 +43,7 @@ span.errortext {
   font-style: italic;
 }
 
-		--></style></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="book"><div class="titlepage"><div><div><h1 class="title"><a name="id-1"></a>OpenSC Manual Pages: Section 5</h1></div></div><hr></div><div class="toc"><p><b>Table of Contents</b></p><dl class="toc"><dt><span class="refentrytitle"><a href="#opensc.conf">opensc.conf</a></span><span class="refpurpose"> &#8212; configuration file for OpenSC</span></dt><dt><span class="refentrytitle"><a href="#pkcs15-profile">pkcs15-profile</a></span><span class="refpurpose"> &#8212; format of profile for <span class="command"><strong>pkcs15-init</strong></span></span></dt></dl></div><div class="refentry"><a name="opensc.conf"></a><div class="titlepage"></div><div class="refnamediv"><h2>Name</h2><p>opensc.conf &#8212; configuration file for OpenSC</p></div><div class="refsect1"><a name="id-1.2.3"></a><h2>Description</h2><p>
+		--></style></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="book"><div class="titlepage"><div><div><h1 class="title"><a name="id-1"></a>OpenSC Manual Pages: Section 5</h1></div></div><hr></div><div class="toc"><p><b>Table of Contents</b></p><dl class="toc"><dt><span class="refentrytitle"><a href="#opensc.conf">opensc.conf</a></span><span class="refpurpose"> — configuration file for OpenSC</span></dt><dt><span class="refentrytitle"><a href="#pkcs15-profile">pkcs15-profile</a></span><span class="refpurpose"> — format of profile for <span class="command"><strong>pkcs15-init</strong></span></span></dt></dl></div><div class="refentry"><a name="opensc.conf"></a><div class="titlepage"></div><div class="refnamediv"><h2>Name</h2><p>opensc.conf — configuration file for OpenSC</p></div><div class="refsect1"><a name="id-1.2.3"></a><h2>Description</h2><p>
 			OpenSC obtains configuration data from the following sources in the following order
 			</p><div class="orderedlist"><ol class="orderedlist" type="1"><li class="listitem"><p>
 						command-line options
@@ -57,7 +57,7 @@ span.errortext {
 						<code class="literal">HKEY_LOCAL_MACHINE</code> (if available)
 				</p></li><li class="listitem"><p>
 						system-wide configuration file
-						(<code class="literal">/usr/etc/opensc.conf</code>)
+						(<code class="literal">/etc/opensc.conf</code>)
 				</p></li></ol></div><p>
 		</p><p>
 			The configuration file, <code class="literal">opensc.conf</code>, is composed
@@ -89,6 +89,8 @@ app <em class="replaceable"><code>application</code></em> {
 			<em class="replaceable"><code>application</code></em>
 			specifies one of:
 			</p><div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; "><li class="listitem"><p>
+						<code class="literal"><em class="replaceable"><code>filename</code></em></code>: Configuration block for the application with specified file path.
+				</p></li><li class="listitem"><p>
 						<code class="literal">default</code>: The fall-back configuration block for all applications
 				</p></li><li class="listitem"><p>
 						<code class="literal">opensc-pkcs11</code>: Configuration block for the PKCS#11 module (<code class="filename">opensc-pkcs11.so</code>)
@@ -96,8 +98,6 @@ app <em class="replaceable"><code>application</code></em> {
 						<code class="literal">onepin-opensc-pkcs11</code>: Configuration block for the PKCS#11 one-PIN-module (<code class="filename">onepin-opensc-pkcs11.so</code>)
 				</p></li><li class="listitem"><p>
 						<code class="literal">cardmod</code>: Configuration block for Windows' minidriver (<code class="filename">opensc-minidriver.dll</code>)
-				</p></li><li class="listitem"><p>
-						<code class="literal">tokend</code>: Configuration block for macOS' tokend (<span class="application">OpenSC.tokend</span>)
 				</p></li><li class="listitem"><p>
 						<code class="literal">cardos-tool</code>,
 						<code class="literal">cryptoflex-tool</code>,
@@ -143,7 +143,7 @@ app <em class="replaceable"><code>application</code></em> {
 					<code class="option">profile_dir = <em class="replaceable"><code>filename</code></em>;</code>
 				</span></dt><dd><p>
 						PKCS#15 initialization/personalization profiles
-						directory for 
+						directory for
 						<span class="citerefentry"><span class="refentrytitle">pkcs15-init</span>(1).
 						</span>
 						(Default: <code class="literal">/usr/share/opensc</code>).
@@ -177,7 +177,7 @@ app <em class="replaceable"><code>application</code></em> {
 				</p></dd><dt><a name="card_drivers"></a><span class="term">
 					<code class="option">card_drivers =  <em class="replaceable"><code>name</code></em>... ;</code>
 				</span></dt><dd><p>
-						Whitelist of card drivers to load at start-up.
+						Allowlist of card drivers to load at start-up.
 						The special value <code class="literal">internal</code> (the
 						default) will load all statically linked drivers.
 					</p><p>
@@ -212,16 +212,16 @@ app <em class="replaceable"><code>application</code></em> {
 				</span></dt><dd><p>
 						Configuration of the smart card reader driver where <em class="replaceable"><code>name</code></em> is one of:
 						</p><div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; "><li class="listitem"><p>
-									<code class="literal">ctapi</code>: See <a class="xref" href="#ctapi" title="Configuration of CT-API Readers">the section called &#8220;Configuration of CT-API Readers&#8221;</a>
+									<code class="literal">ctapi</code>: See <a class="xref" href="#ctapi" title="Configuration of CT-API Readers">the section called “Configuration of CT-API Readers”</a>
 								</p></li><li class="listitem"><p>
-									<code class="literal">pcsc</code>: See <a class="xref" href="#pcsc" title="Configuration of PC/SC Readers">the section called &#8220;Configuration of PC/SC Readers&#8221;</a>
+									<code class="literal">pcsc</code>: See <a class="xref" href="#pcsc" title="Configuration of PC/SC Readers">the section called “Configuration of PC/SC Readers”</a>
 							</p></li><li class="listitem"><p>
-									<code class="literal">openct</code>: See <a class="xref" href="#openct" title="Configuration of OpenCT Readers">the section called &#8220;Configuration of OpenCT Readers&#8221;</a>
+									<code class="literal">openct</code>: See <a class="xref" href="#openct" title="Configuration of OpenCT Readers">the section called “Configuration of OpenCT Readers”</a>
 							</p></li><li class="listitem"><p>
 									<code class="literal">cryptotokenkit</code>: Configuration block for CryptoTokenKit readers
 							</p></li></ul></div><p>
 					</p><p>
-						See <a class="xref" href="#reader_driver" title="Configuration of Smart Card Reader Driver">the section called &#8220;Configuration of Smart Card Reader Driver&#8221;</a>.
+						See <a class="xref" href="#reader_driver" title="Configuration of Smart Card Reader Driver">the section called “Configuration of Smart Card Reader Driver”</a>.
 					</p></dd><dt><span class="term">
 					<code class="option">card_driver <em class="replaceable"><code>name</code></em> {
 						<em class="replaceable"><code>block_contents</code></em>
@@ -230,13 +230,15 @@ app <em class="replaceable"><code>application</code></em> {
 				</span></dt><dd><p>
 						Configuration of the card driver where <em class="replaceable"><code>name</code></em> is one of:
 						</p><div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; "><li class="listitem"><p>
-									<code class="literal">npa</code>: See <a class="xref" href="#npa" title="Configuration Options for German ID Card">the section called &#8220;Configuration Options for German ID Card&#8221;</a>
+									<code class="literal">npa</code>: See <a class="xref" href="#npa" title="Configuration Options for German ID Card">the section called “Configuration Options for German ID Card”</a>
 							</p></li><li class="listitem"><p>
-									<code class="literal">dnie</code>: See <a class="xref" href="#dnie" title="Configuration Options for DNIe">the section called &#8220;Configuration Options for DNIe&#8221;</a>
+									<code class="literal">dnie</code>: See <a class="xref" href="#dnie" title="Configuration Options for DNIe">the section called “Configuration Options for DNIe”</a>
 							</p></li><li class="listitem"><p>
-									<code class="literal">edo</code>: See <a class="xref" href="#edo" title="Configuration Options for Polish eID Card">the section called &#8220;Configuration Options for Polish eID Card&#8221;</a>
+									<code class="literal">edo</code>: See <a class="xref" href="#edo" title="Configuration Options for Polish eID Card">the section called “Configuration Options for Polish eID Card”</a>
 							</p></li><li class="listitem"><p>
-									<code class="literal">myeid</code>: See <a class="xref" href="#myeid" title="Configuration Options for MyEID Card">the section called &#8220;Configuration Options for MyEID Card&#8221;</a>
+									<code class="literal">eoi</code>: See <a class="xref" href="#eoi" title="Configuration Options for Slovenian eID Card">the section called “Configuration Options for Slovenian eID Card”</a>
+							</p></li><li class="listitem"><p>
+									<code class="literal">myeid</code>: See <a class="xref" href="#myeid" title="Configuration Options for MyEID Card">the section called “Configuration Options for MyEID Card”</a>
 							</p></li><li class="listitem"><p>
 									Any other value: Configuration block for an externally loaded card driver
 							</p></li></ul></div><p>
@@ -251,8 +253,26 @@ app <em class="replaceable"><code>application</code></em> {
 						the driver using the <code class="option">card_atr</code>
 						block.
 					</p><p>
-						For details see <a class="xref" href="#card_atr" title="Configuration based on ATR">the section called &#8220;Configuration based on ATR&#8221;</a>.
+						For details see <a class="xref" href="#card_atr" title="Configuration based on ATR">the section called “Configuration based on ATR”</a>.
 					</p></dd><dt><span class="term">
+					<code class="option">disable_hw_pkcs1_padding = <em class="replaceable"><code>value</code></em>;</code>
+				</span></dt><dd><p>
+						Disabling PKCS#1 v1.5 padding in HW when card supports doing raw RSA operations.
+						Known parameters:
+						</p><div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; "><li class="listitem"><p>
+									<code class="literal">no</code>: PKCS#1 v1.5 padding is enabled in HW when card supports it.
+							</p></li><li class="listitem"><p>
+									<code class="literal">sign</code>: PKCS#1 v1.5 padding
+								is disabled only for signatures (PKCS#1 v1.5 type 1).
+							</p></li><li class="listitem"><p>
+									<code class="literal">decipher</code>: PKCS#1 v1.5 padding
+								is disabled only for decryption (PKCS#1 v1.5 type 2).
+							</p></li><li class="listitem"><p>
+									<code class="literal">both</code>: PKCS#1 v1.5 padding
+								is disabled both for signatures and decryption (PKCS#1 v1.5 type 1 and 2).
+							</p></li></ul></div><p>
+						(Default: <code class="literal">decipher</code>).
+				</p></dd><dt><span class="term">
 					<code class="option">secure_messaging <em class="replaceable"><code>name</code></em> {
 						<em class="replaceable"><code>block_contents</code></em>
 						}
@@ -267,7 +287,7 @@ app <em class="replaceable"><code>application</code></em> {
 								<code class="option">module_path = <em class="replaceable"><code>filename</code></em>;</code>
 							</span></dt><dd><p>
 									Directory with external SM module
-									(Default: /usr/lib).
+									(Default: /usr/lib64).
 								</p><p>
 									If this configuration value is not
 									found on Windows, the registry key
@@ -329,9 +349,7 @@ app <em class="replaceable"><code>application</code></em> {
 				</span></dt><dd><p>
 						Internal configuration options where <em class="replaceable"><code>name</code></em> is one of:
 						</p><div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; "><li class="listitem"><p>
-									<code class="literal">pkcs15</code>: See <a class="xref" href="#framework%20pkcs15" title="Configuration of PKCS#15 Framework">the section called &#8220;Configuration of PKCS#15 Framework&#8221;</a>
-							</p></li><li class="listitem"><p>
-									<code class="literal">tokend</code>: See <a class="xref" href="#framework%20tokend" title="Configuration of Tokend">the section called &#8220;Configuration of Tokend&#8221;</a>
+									<code class="literal">pkcs15</code>: See <a class="xref" href="#framework%20pkcs15" title="Configuration of PKCS#15 Framework">the section called “Configuration of PKCS#15 Framework”</a>
 							</p></li></ul></div><p>
 					</p></dd><dt><span class="term">
 					<code class="option">pkcs11 {
@@ -341,7 +359,7 @@ app <em class="replaceable"><code>application</code></em> {
 				</span></dt><dd><p>
 						Parameters for the OpenSC PKCS11 module.
 					</p><p>
-						For details see <a class="xref" href="#pkcs11" title="Configuration of PKCS#11">the section called &#8220;Configuration of PKCS#11&#8221;</a>.
+						For details see <a class="xref" href="#pkcs11" title="Configuration of PKCS#11">the section called “Configuration of PKCS#11”</a>.
 					</p></dd></dl></div><div class="refsect2"><a name="reader_driver"></a><h3>Configuration of Smart Card Reader Driver</h3><div class="refsect3"><a name="id-1.2.4.3.2"></a><h4>Configuration Options for all Reader Drivers</h4><div class="variablelist"><dl class="variablelist"><dt><span class="term">
 							<code class="option">max_send_size = <em class="replaceable"><code>num</code></em>;</code>
 							<code class="option">max_recv_size = <em class="replaceable"><code>num</code></em>;</code>
@@ -459,6 +477,9 @@ app <em class="replaceable"><code>application</code></em> {
 							card driver will do everything
 							necessary before sending the data
 							(hash code) to the card.
+					</p><p>
+							PKCS#1 v1.5 padding in HW can be globally disabled by option <code class="literal">disable_hw_pkcs1_padding</code>.
+							When the global option is used to disable padding, the padding will be disabled even though the MyEID-specific option does not turn it off.
 					</p></dd></dl></div></div><div class="refsect2"><a name="npa"></a><h3>Configuration Options for German ID Card</h3><div class="variablelist"><dl class="variablelist"><dt><span class="term">
 						<code class="option">can = <em class="replaceable"><code>value</code></em>;</code>
 					</span></dt><dd><p>
@@ -511,14 +532,26 @@ app <em class="replaceable"><code>application</code></em> {
 					</p></dd></dl></div></div><div class="refsect2"><a name="edo"></a><h3>Configuration Options for Polish eID Card</h3><div class="variablelist"><dl class="variablelist"><dt><span class="term">
 						<code class="option">can = <em class="replaceable"><code>value</code></em>;</code>
 					</span></dt><dd><p>
-							CAN (Card Access Number &#8211; 6 digit number
+							CAN (Card Access Number – 6 digit number
 							printed on the right bottom corner of the
 							front side of the document) is required
 							to establish connection with the card.
 							It might be overwritten by <code class="literal">EDO_CAN</code>
 							environment variable. Currently, it is not
 							possible to set it in any other way.
-					</p></dd></dl></div></div><div class="refsect2"><a name="card_atr"></a><h3>Configuration based on ATR</h3><p>
+					</p></dd></dl></div></div><div class="refsect2"><a name="eoi"></a><h3>Configuration Options for Slovenian eID Card</h3><div class="variablelist"><dl class="variablelist"><dt><span class="term">
+						<code class="option">can = <em class="replaceable"><code>value</code></em>;</code>
+					</span></dt><dd><p>
+							CAN (Card Access Number – 6 digit number
+							printed on the right bottom corner of the
+							front side of the document) is required
+							to establish connection with the card.
+							It might be overwritten by <code class="literal">EOI_CAN</code>
+							environment variable. As CAN is also stored on the card
+							(in encrypted form) it can be used to automatically establish
+							secure connection, but only if the card is accessed over the
+							contact interface.
+					</p></dd></dl></div></div><div class="refsect2"><a name="piv"></a><h3>Configuration Options for PIV Card</h3><div class="variablelist"><dl class="variablelist"></dl></div></div><div class="refsect2"><a name="card_atr"></a><h3>Configuration based on ATR</h3><p>
 				</p><div class="variablelist"><dl class="variablelist"><dt><span class="term">
 							<code class="option">atrmask = <em class="replaceable"><code>hexstring</code></em>;</code>
 						</span></dt><dd><p>
@@ -745,12 +778,40 @@ app <em class="replaceable"><code>application</code></em> {
 									locked"</code>).
 						</p></dd></dl></div><p>
 			</p></div><div class="refsect2"><a name="framework%20pkcs15"></a><h3>Configuration of PKCS#15 Framework</h3><div class="variablelist"><dl class="variablelist"><dt><span class="term">
-						<code class="option">use_file_caching = <em class="replaceable"><code>bool</code></em>;</code>
+						<code class="option">use_file_caching = <em class="replaceable"><code>value</code></em>;</code>
 					</span></dt><dd><p>
 							Whether to cache the card's files (e.g.
 							certificates) on disk in
-							<code class="option">file_cache_dir</code> (Default:
-							<code class="literal">false</code>).
+							<code class="option">file_cache_dir</code>.
+							Possible parameters:
+							</p><div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; "><li class="listitem"><p>
+									<code class="literal">yes</code>: Cache all files (public and private).
+								</p></li><li class="listitem"><p>
+									<code class="literal">public</code>: Cache only public files.
+								</p></li><li class="listitem"><p>
+									<code class="literal">no</code>: File caching disabled.
+								</p></li></ul></div><p>
+							(Default: <code class="literal">public</code>
+							for the following card drivers
+							<code class="literal">atrust-acos</code> (deactivated driver),
+							<code class="literal">belpic</code>,
+							<code class="literal">cac1</code>,
+							<code class="literal">cac</code>,
+							<code class="literal">coolkey</code>,
+							<code class="literal">dnie</code>,
+							<code class="literal">edo</code>,
+							<code class="literal">esteid2018</code>,
+							<code class="literal">flex</code> (deactivated driver),
+							<code class="literal">cyberflex</code> (deactivated driver),
+							<code class="literal">gemsafeV1</code>,
+							<code class="literal">idprime</code>,
+							<code class="literal">itacns</code>,
+							<code class="literal">jpki</code>,
+							<code class="literal">MaskTech</code>,
+							<code class="literal">mcrd</code> (deactivated driver),
+							<code class="literal">npa</code>,
+							<code class="literal">nqapplet</code>,
+							<code class="literal">tcos</code> and otherwise <code class="literal">no</code>).
 						</p><p>
 							If caching is done by a system process, the
 							cached files may be placed inaccessible from
@@ -778,6 +839,15 @@ app <em class="replaceable"><code>application</code></em> {
 							cached information. Note that the cached files
 							may contain personal data such as name and mail
 							address.
+						</p><p>
+                            The PIV-II card driver supports the history object's
+                            list of retired keys and certificates if they are
+							readable in the file cache directory.
+							If the specified object's URL is
+							<code class="literal">"http://"</code><em class="replaceable"><code>DNS name</code></em><code class="literal">"/"</code><em class="replaceable"><code>ASCII-HEX OffCardKeyHistoryFile</code></em>,
+							then the searches for the file name
+							<em class="replaceable"><code>OffCardKeyHistoryFile</code></em>
+							in the cache directory.
 					</p></dd><dt><span class="term">
 						<code class="option">use_pin_caching = <em class="replaceable"><code>bool</code></em>;</code>
 					</span></dt><dd><p>
@@ -800,7 +870,7 @@ app <em class="replaceable"><code>application</code></em> {
 							<code class="literal">use_pin_caching</code> option for OpenSC
 							to be able to provide PIN for the card when needed.
 					</p></dd><dt><span class="term">
-						<code class="option">private_certificate = <em class="replaceable"><code>value</code></em>;</code>
+						<code class="option">pin_protected_certificate = <em class="replaceable"><code>value</code></em>;</code>
 					</span></dt><dd><p>
 							How to handle a PIN-protected certificate. Known
 							parameters:
@@ -813,8 +883,7 @@ app <em class="replaceable"><code>application</code></em> {
 								</p></li><li class="listitem"><p>
 										<code class="literal">ignore</code>: Ignore PIN-protected certificates.
 								</p></li></ul></div><p>
-							(Default: <code class="literal">ignore</code> in Tokend,
-							<code class="literal">protect</code> otherwise).
+							(Default: <code class="literal">protect</code>.
 					</p></dd><dt><span class="term">
 						<code class="option">enable_pkcs15_emulation = <em class="replaceable"><code>bool</code></em>;</code>
 					</span></dt><dd><p>
@@ -837,12 +906,11 @@ app <em class="replaceable"><code>application</code></em> {
 						<code class="option">builtin_emulators = <em class="replaceable"><code>emulators</code></em>;</code>
 					</span></dt><dd><p>
 							List of the builtin pkcs15 emulators to test
-							(Default: <code class="literal">westcos, openpgp, 
-								starcert, tcos, esteid, itacns, 
-								PIV-II, cac, gemsafeGPK, gemsafeV1, actalis,
-								atrust-acos, tccardos, entersafe, pteid,
-								oberthur, sc-hsm, dnie, gids, iasecc, jpki,
-								coolkey, din66291</code>)
+							(Default: <code class="literal">internal</code>)
+						</p><p>
+							Special value of <code class="literal">internal</code> will try all not disabled builtin pkcs15 emulators.
+						</p><p>
+							Special value of <code class="literal">old</code> will try all disabled pkcs15 emulators.
 					</p></dd><dt><span class="term">
 						<code class="option">pkcs11_enable_InitToken = <em class="replaceable"><code>bool</code></em>;</code>
 					</span></dt><dd><p>
@@ -910,13 +978,15 @@ app <em class="replaceable"><code>application</code></em> {
 										Do not expose application in PKCS#15
 										framework (Default:
 										<code class="literal">false</code>)
-								</p></dd></dl></div></dd></dl></div></div><div class="refsect2"><a name="framework%20tokend"></a><h3>Configuration of Tokend</h3><div class="variablelist"><dl class="variablelist"><dt><span class="term">
-						<code class="option">score = <em class="replaceable"><code>num</code></em>;</code>
-					</span></dt><dd><p>
-							Score for <span class="application">OpenSC.tokend</span>
-							(Default: <code class="literal">300</code>).  The tokend with
-							the highest score shall be used.
-					</p></dd></dl></div></div><div class="refsect2"><a name="pkcs11"></a><h3>Configuration of PKCS#11</h3><div class="variablelist"><dl class="variablelist"><dt><span class="term">
+								</p></dd><dt><span class="term">
+									<code class="option">user_pin = <em class="replaceable"><code>name</code></em>;</code>
+								</span></dt><dd><p>
+									Name of the User PIN object that will be used as the main PIN.
+								</p></dd><dt><span class="term">
+									<code class="option">sign_pin = <em class="replaceable"><code>name</code></em>;</code>
+								</span></dt><dd><p>
+									Name of the PIN object that will be used for signing.
+								</p></dd></dl></div></dd></dl></div></div><div class="refsect2"><a name="pkcs11"></a><h3>Configuration of PKCS#11</h3><div class="variablelist"><dl class="variablelist"><dt><span class="term">
 						<code class="option">max_virtual_slots = <em class="replaceable"><code>num</code></em>;</code>
 					</span></dt><dd><p>
 							Maximum Number of virtual slots (Default:
@@ -926,10 +996,13 @@ app <em class="replaceable"><code>application</code></em> {
 					</p></dd><dt><span class="term">
 						<code class="option">slots_per_card = <em class="replaceable"><code>num</code></em>;</code>
 					</span></dt><dd><p>
-							Maximum number of slots per smart card (Default:
-							<code class="literal">4</code>).  If the card has fewer keys
+							Maximum number of PIN slots per smart card (Default:
+							<code class="literal">4</code>).  If the card has fewer PINs
 							than defined here, the remaining number of slots
-							will be empty.
+                            will be empty. For Firefox, Chrome and Chromium, the
+							<code class="option">slots_per_card</code> is set to <code class="literal">1</code>,
+							to avoid prompting for unrelated PINs.  Typically, this
+							effectively disables signature PINs and keys.
 					</p></dd><dt><span class="term">
 						<code class="option">lock_login = <em class="replaceable"><code>bool</code></em>;</code>
 					</span></dt><dd><p>
@@ -1118,15 +1191,21 @@ app <em class="replaceable"><code>application</code></em> {
 				</span></dt><dd><p>
 						PIV configuration during initialization with
 						<span class="application">piv-tool</span>.
+				</p></dd><dt><span class="term">
+					<code class="envar">PIV_USE_SM</code>,
+					<code class="envar">PIV_PAIRING_CODE</code>
+				</span></dt><dd><p>
+						PIV configuration during initialization
+						See Configuration Options for PIV Card.
 				</p></dd></dl></div></div><div class="refsect1"><a name="id-1.2.6"></a><h2>Files</h2><div class="variablelist"><dl class="variablelist"><dt><span class="term">
-					<code class="filename">/usr/etc/opensc.conf</code>
+					<code class="filename">/etc/opensc.conf</code>
 				</span></dt><dd><p>
 						System-wide configuration file
 				</p></dd><dt><span class="term">
 					<code class="filename">/usr/share/doc/opensc/opensc.conf</code>
 				</span></dt><dd><p>
 						Extended example configuration file
-				</p></dd></dl></div></div></div><div class="refentry"><div class="refentry.separator"><hr></div><a name="pkcs15-profile"></a><div class="titlepage"></div><div class="refnamediv"><h2>Name</h2><p>pkcs15-profile &#8212; format of profile for <span class="command"><strong>pkcs15-init</strong></span></p></div><div class="refsect1"><a name="id-1.3.3"></a><h2>Description</h2><p>
+				</p></dd></dl></div></div></div><div class="refentry"><div class="refentry.separator"><hr></div><a name="pkcs15-profile"></a><div class="titlepage"></div><div class="refnamediv"><h2>Name</h2><p>pkcs15-profile — format of profile for <span class="command"><strong>pkcs15-init</strong></span></p></div><div class="refsect1"><a name="id-1.3.3"></a><h2>Description</h2><p>
 			The <span class="command"><strong>pkcs15-init</strong></span> utility for PKCS #15 smart card
 			personalization is controlled via profiles. When starting, it will read two
 			such profiles at the moment, a generic application profile, and a card
@@ -1141,11 +1220,445 @@ app <em class="replaceable"><code>application</code></em> {
 		</p><p>
 			The card specific profile contains additional information required during
 			card initialization, such as location of PIN files, key references etc.
-			Profiles currently reside in <code class="filename">@pkgdatadir@</code>
-		</p></div><div class="refsect1"><a name="id-1.3.4"></a><h2>Syntax</h2><p>
-			This section should contain information about the profile syntax. Will add
-			this soonishly.
-		</p></div><div class="refsect1"><a name="id-1.3.5"></a><h2>See also</h2><p>
+			Profiles currently reside in <code class="filename">/usr/share/opensc</code>
+		</p><p>
+			Basic PKCS#15 terminology:
+			</p><div class="orderedlist"><ol class="orderedlist" type="1"><li class="listitem"><p>
+						MF (Master File) is root of the filesystem hierarchy
+				</p></li><li class="listitem"><p>
+						DF(PKCS#15) is directory containing the PKCS#15 files and directories
+				</p></li><li class="listitem"><p>
+						EF(ODF) (Object Directory File) is elementary file containing pointers 
+						to other elementary files (PrKDFs, PuKDFs, SKDFs, CDFs, DODFs, AODFs)
+				</p></li><li class="listitem"><p>
+						PrKDF (Private Key Directory File) is elementary file containing
+						pointers to the private keys and additional information about the private keys
+				</p></li><li class="listitem"><p>
+						PubKDF (Public Key Directory File) is elementary file containing pointers to the public
+						keys and additional information about the public keys
+				</p></li><li class="listitem"><p>
+						CDF (Certificate Directory File) is elementary file containing pointers to the
+						certificates and additional information about the certificates
+				</p></li><li class="listitem"><p>
+						EF(TokenInfo) is elementary file with generic information about the card
+				</p></li></ol></div><p>
+		</p></div><div class="refsect1"><a name="id-1.3.4"></a><h2>Syntax and semantics</h2><p>
+			The block syntax of profile files is in general similar to the configuration file.
+			The profile file, is composed of blocks, which, in general, have the following format:
+			</p><pre class="programlisting">
+<em class="replaceable"><code>key</code></em> [, <em class="replaceable"><code>name</code></em>...] {
+	<em class="replaceable"><code>block_contents</code></em>
+}
+			</pre><p>
+			<em class="replaceable"><code>block_contents</code></em> is one or more
+			<em class="replaceable"><code>block_item</code></em>s where a
+			<em class="replaceable"><code>block_item</code></em> is one of
+			</p><div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; "><li class="listitem"><p>
+						# <em class="replaceable"><code>comment string</code></em>
+				</p></li><li class="listitem"><p>
+						<em class="replaceable"><code>key</code></em> [, <em class="replaceable"><code>name</code></em>...] = <em class="replaceable"><code>value</code></em>;
+				</p></li><li class="listitem"><p>
+						<em class="replaceable"><code>block</code></em>
+				</p></li></ul></div><p>
+		</p><p>
+			At the root level, the profile contains several configuration blocks.
+			The block keys are as follows:
+			</p><div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; "><li class="listitem"><p>
+						<code class="literal">cardinfo</code>: Configuration for general information about card.
+				</p></li><li class="listitem"><p>
+						<code class="literal">pkcs15</code>: Control for some of the general aspects of the PKCS#15 put onto the card.
+				</p></li><li class="listitem"><p>
+						<code class="literal">option</code>: Profile options to modify the behavior of profile.
+				</p></li><li class="listitem"><p>
+						<code class="literal">PIN</code>: Configuration and limits for particular PIN type.
+				</p></li><li class="listitem"><p>
+						<code class="literal">filesystem</code>: Specification for filesystem that is to be created on the card.
+				</p></li><li class="listitem"><p>
+						<code class="literal">macros</code>
+				</p></li></ul></div><p>
+		</p><div class="refsect2"><a name="profile"></a><h3>Profile file configuration</h3><div class="refsect3"><a name="id-1.3.4.4.2"></a><h4>Configuration of Card Information</h4><div class="variablelist"><dl class="variablelist"><dt><span class="term">
+							<code class="option">cardinfo {
+								<em class="replaceable"><code>block_contents</code></em>
+								}
+							</code>
+						</span></dt><dd><p>
+								Configuration for general information about card:
+							</p><div class="variablelist"><dl class="variablelist"><dt><span class="term">
+										<code class="option">label = <em class="replaceable"><code>name</code></em>;</code>
+									</span></dt><dd><p>
+											Card label (Default: <code class="literal">OpenSC Card</code>).
+									</p></dd><dt><span class="term">
+										<code class="option">manufacturer = <em class="replaceable"><code>name</code></em>;</code>
+									</span></dt><dd><p>
+											Card manufacturer (Default: <code class="literal">OpenSC Project</code>).
+									</p></dd><dt><span class="term">
+										<code class="option">min-pin-length = <em class="replaceable"><code>int</code></em>;</code>
+									</span></dt><dd><p>
+											Minimal length of PIN (Default: <code class="literal">4</code>).
+									</p></dd><dt><span class="term">
+										<code class="option">max-pin-length = <em class="replaceable"><code>int</code></em>;</code>
+									</span></dt><dd><p>
+											Maximal length of PIN, should be overridden in the per-card profile
+											(Default: <code class="literal">8</code>).
+									</p></dd><dt><span class="term">
+										<code class="option">pin-encoding = <em class="replaceable"><code>value</code></em>;</code>
+									</span></dt><dd><p>
+											Encoding type of PIN. Known parameters:
+											</p><div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; "><li class="listitem"><p>
+														<code class="literal">BCD</code>:
+														binary-coded decimal
+												</p></li><li class="listitem"><p>
+														<code class="literal">ascii-numeric</code>:
+														ASCII numerical values
+												</p></li><li class="listitem"><p>
+														<code class="literal">utf8</code>
+												</p></li><li class="listitem"><p>
+														<code class="literal">half-nibble-bcd</code>
+												</p></li><li class="listitem"><p>
+														<code class="literal">iso9564-1</code>
+												</p></li></ul></div><p>
+											(Default: <code class="literal">ascii-numeric</code>).
+									</p></dd><dt><span class="term">
+										<code class="option">pin-pad-char = <em class="replaceable"><code>value</code></em>;</code>
+									</span></dt><dd><p>
+											Character used for padding the PIN when needed (Default: <code class="literal">0x00</code>).
+									</p></dd><dt><span class="term">
+										<code class="option">pin-domains = <em class="replaceable"><code>bool</code></em>;</code>
+									</span></dt><dd><p>
+											Some cards need to keep all their PINs in separate directories.
+        									The particular keys in that domain will be put below the DF of the specified PIN.
+											(Default: <code class="literal">no</code>)
+									</p></dd></dl></div></dd></dl></div></div><div class="refsect3"><a name="id-1.3.4.4.3"></a><h4>Configuration of PKCS#15</h4><div class="variablelist"><dl class="variablelist"><dt><span class="term">
+							<code class="option">pkcs15 {
+								<em class="replaceable"><code>block_contents</code></em>
+								}
+							</code>
+						</span></dt><dd><p>
+								Control for some of the general aspects of the PKCS#15 put onto the card.
+								Parameters in this block are:
+							</p><div class="variablelist"><dl class="variablelist"><dt><span class="term">
+										<code class="option">direct-certificates = <em class="replaceable"><code>bool</code></em>;</code>
+									</span></dt><dd><p>
+											The PKCS#15 system must contain at least one CDF, it contains the certificates
+											directly or references to certificates. This options defines whether the certificates
+											should be put directly in the CDF itself or not (Default: <code class="literal">no</code>).
+									</p></dd><dt><span class="term">
+										<code class="option">encode-df-length = <em class="replaceable"><code>bool</code></em>;</code>
+									</span></dt><dd><p>
+											Save length of DF into ODF file. Useful if we store certificates directly in the CDF
+											for better better performance and robustness (Default: <code class="literal">no</code>).
+									</p></dd><dt><span class="term">
+										<code class="option">do-last-update = <em class="replaceable"><code>value</code></em>;</code>
+									</span></dt><dd><p>
+											Store information about last update in the EF(TokenInfo) (Default: <code class="literal">yes</code>).
+									</p></dd><dt><span class="term">
+										<code class="option">pkcs15-id-style = <em class="replaceable"><code>value</code></em>;</code>
+									</span></dt><dd><p>
+											Method to calculate ID of the crypto objects. Known parameters:
+											</p><div class="itemizedlist"><code class="literal">native</code><ul class="itemizedlist" style="list-style-type: disc; "><li class="listitem"><p>
+														<code class="literal">native</code>:
+														'E' + number_of_present_objects_of_the_same_type
+												</p></li><li class="listitem"><p>
+														<code class="literal">mozilla</code>:
+														SHA1(modulus) for RSA
+												</p></li><li class="listitem"><p>
+														<code class="literal">rfc2459</code>
+														SHA1(SequenceASN1 of public key components as ASN1 integers)
+												</p></li></ul></div><p>
+									</p></dd><dt><span class="term">
+										<code class="option">minidriver-support-style = <em class="replaceable"><code>value</code></em>;</code>
+									</span></dt><dd><p>
+											Style of pkcs15-init support of minidriver. Known parameters:
+											</p><div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; "><li class="listitem"><p>
+														<code class="literal">none</code>
+												</p></li><li class="listitem"><p>
+														<code class="literal">gemalto</code>
+												</p></li></ul></div><p>
+											(Default: <code class="literal">none</code>)
+									</p></dd></dl></div></dd></dl></div></div><div class="refsect3"><a name="id-1.3.4.4.4"></a><h4>Configuration of Profile Option</h4><div class="variablelist"><dl class="variablelist"><dt><span class="term">
+							<code class="option">option <em class="replaceable"><code>name</code></em> {
+								<em class="replaceable"><code>block_contents</code></em>
+								}
+							</code>
+							<p>
+								The <code class="literal">name</code> specifies profile options to modify the behavior of profile, it can be
+							</p>
+							<p>
+								</p><div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; "><li class="listitem"><p>
+											<code class="literal">default</code>:
+											option specifies default settings and this block with option is always processed,
+									</p></li><li class="listitem"><p>
+											<code class="literal">onepin</code>:
+											option for using 1 user PIN, creation/deletion/generation is controlled by the user PIN and thus by the user (as a result, only 1 user PIN is possible),
+									</p></li><li class="listitem"><p>
+											<code class="literal">small</code>
+											option suitable for cards with small memory.
+									</p></li></ul></div><p>
+							</p>
+							<p>
+								The options are used by <code class="literal">pkcs15-init</code> tool by <code class="literal">--profile name, -p name</code>:
+							</p>
+							<p>
+								</p><div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; "><li class="listitem"><p>
+											<code class="literal">pkcs15+default</code>:
+											the default (not needed to specify it)
+									</p></li><li class="listitem"><p>
+											<code class="literal">pkcs15+onepin</code>:
+											for the onepin profile option
+									</p></li><li class="listitem"><p>
+											<code class="literal">pkcs15+small</code>
+											for the small profile option
+									</p></li></ul></div><p>
+							</p>
+							<p>
+								The option block can contain following sub-blocks:
+							</p>
+						</span></dt><dd><div class="variablelist"><dl class="variablelist"><dt><span class="term">
+										<code class="option">macros { block_contents }</code>
+									</span></dt><dd><p>
+											Macros are specified in form of <code class="literal">name = value;</code> pairs.
+									</p></dd><dt><span class="term">
+										<code class="option">pkcs15 { block_contents }</code>
+									</span></dt><dd><p>
+											Inner block for configuration of PKCS#15 structure.
+									</p></dd></dl></div></dd></dl></div></div><div class="refsect3"><a name="id-1.3.4.4.5"></a><h4>Configuration of PINs</h4><div class="variablelist"><dl class="variablelist"><dt><span class="term">
+							<code class="option">PIN <em class="replaceable"><code>name</code></em> {
+								<em class="replaceable"><code>block_contents</code></em>
+								}
+							</code>
+							<p>
+								The <code class="literal">name</code> specifies PIN type, it can be
+							</p>
+							<p>
+								</p><div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; "><li class="listitem"><p>
+											<code class="literal">pin</code> or <code class="literal">user-pin</code>
+											(no need to set file path or reference as it is done dynamically)
+									</p></li><li class="listitem"><p>
+											<code class="literal">puk</code> or <code class="literal">user-puk</code>
+									</p></li><li class="listitem"><p>
+											<code class="literal">sopin</code> or <code class="literal">so-pin</code>
+									</p></li><li class="listitem"><p>
+											<code class="literal">sopuk</code> or <code class="literal">so-puk</code>
+									</p></li></ul></div><p>
+							</p>
+						</span></dt><dd><p>
+								Known parameters are:
+							</p><div class="variablelist"><dl class="variablelist"><dt><span class="term">
+										<code class="option">attempts = <em class="replaceable"><code>int</code></em>;</code>
+									</span></dt><dd><p>
+											Defines number of attempts for the given PIN (Default: <code class="literal">3</code>).
+									</p></dd><dt><span class="term">
+										<code class="option">flags = <em class="replaceable"><code>value...</code></em>;</code>
+									</span></dt><dd><p>
+											Flags define properties of the PIN. Possible flags:
+											</p><div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; "><li class="listitem"><p>
+														<code class="literal">case-sensitive</code>
+												</p></li><li class="listitem"><p>
+														<code class="literal">local</code>
+												</p></li><li class="listitem"><p>
+														<code class="literal">change-disabled</code>
+												</p></li><li class="listitem"><p>
+														<code class="literal">unblock-disabled</code>
+												</p></li><li class="listitem"><p>
+														<code class="literal">initialized</code>
+												</p></li><li class="listitem"><p>
+														<code class="literal">needs-padding</code>
+												</p></li><li class="listitem"><p>
+														<code class="literal">unblockingPin</code>
+												</p></li><li class="listitem"><p>
+														<code class="literal">soPin</code>
+												</p></li><li class="listitem"><p>
+														<code class="literal">disable-allowed</code>
+												</p></li><li class="listitem"><p>
+														<code class="literal">integrity-protected</code>
+												</p></li><li class="listitem"><p>
+														<code class="literal">confidentiality-protected</code>
+												</p></li><li class="listitem"><p>
+														<code class="literal">exchangeRefData</code>
+												</p></li></ul></div><p>
+											(Default: <code class="literal">local,initialized,needs-padding</code>).
+									</p></dd><dt><span class="term">
+										<code class="option">auth-id = <em class="replaceable"><code>value</code></em>;</code>
+									</span></dt><dd><p>
+											Value used for auth ID (Default: <code class="literal">0</code>).
+									</p></dd><dt><span class="term">
+										<code class="option">min-length = <em class="replaceable"><code>int</code></em>;</code>
+									</span></dt><dd><p>
+											Minimal length of PIN (Default: value <code class="literal">min-pin-length</code> set in <code class="literal">cardinfo</code> block).
+									</p></dd><dt><span class="term">
+										<code class="option">max-length = <em class="replaceable"><code>int</code></em>;</code>
+									</span></dt><dd><p>
+											Maximal length of PIN (Default: value <code class="literal">max-pin-length</code> set in <code class="literal">cardinfo</code> block).
+									</p></dd><dt><span class="term">
+										<code class="option">reference = <em class="replaceable"><code>int</code></em>;</code>
+									</span></dt><dd><p>
+											Value of reference of the PIN (Default: set in particular card driver).
+									</p></dd><dt><span class="term">
+										<code class="option">file = <em class="replaceable"><code>name</code></em>;</code>
+									</span></dt><dd><p>
+											File with PIN, obsolete option (Default: None).
+									</p></dd><dt><span class="term">
+										<code class="option">offset = <em class="replaceable"><code>int</code></em>;</code>
+									</span></dt><dd><p>
+											Offset of PIN in PIN file, obsolete option (Default: <code class="literal">0</code>).
+									</p></dd><dt><span class="term">
+										<code class="option">encoding = <em class="replaceable"><code>value</code></em>;</code>
+									</span></dt><dd><p>
+											Encoding type of PIN. Possible values:
+											</p><div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; "><li class="listitem"><p>
+														<code class="literal">BCD</code>
+												</p></li><li class="listitem"><p>
+														<code class="literal">ascii-numeric</code>
+												</p></li><li class="listitem"><p>
+														<code class="literal">utf8</code>
+												</p></li><li class="listitem"><p>
+														<code class="literal">half-nibble-bcd</code>
+												</p></li><li class="listitem"><p>
+														<code class="literal">iso9564-1</code>
+												</p></li></ul></div><p>
+											(Default: value <code class="literal">pin-encoding</code> set in <code class="literal">cardinfo</code> block).
+									</p></dd><dt><span class="term">
+										<code class="option">stored-length = <em class="replaceable"><code>int</code></em>;</code>
+									</span></dt><dd><p>
+											(Default: value <code class="literal">max-pin-length</code> set in <code class="literal">cardinfo</code> block).
+									</p></dd><dt><span class="term">
+										<code class="option">max-unlocks = <em class="replaceable"><code>int</code></em>;</code>
+									</span></dt><dd><p>
+											(Default: <code class="literal">0</code>).
+									</p></dd></dl></div></dd></dl></div><p>
+					Values in this block can be set by macros. That allows to specify the particular values with the usage of option.
+				</p></div><div class="refsect3"><a name="id-1.3.4.4.6"></a><h4>Configuration of Filesystem</h4><code class="option">filesystem {
+					<em class="replaceable"><code>block_contents</code></em>
+					}
+				</code><p>
+					This block contains the specification for filesystem that is to be created on the card.
+					The <code class="literal">filesystem</code> consists of several nested blocks representing <code class="literal">DF</code> and <code class="literal">EF</code> files.
+					When the DFs or EFs are specified in card specific profile, this is added to the file system info specified in the main profile.
+				</p><div class="variablelist"><dl class="variablelist"><dt><span class="term">
+							<code class="option">EF <em class="replaceable"><code>name</code></em> {
+								<em class="replaceable"><code>block_contents</code></em>
+								}
+							</code>
+							<p>
+								This block defines elementary file in PKCS#15 file hierarchy.
+								The name can be one of:
+								</p><div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; "><li class="listitem"><p>
+											<code class="literal">PKCS15-TokenInfo</code>
+									</p></li><li class="listitem"><p>
+											<code class="literal">PKCS15-ODF</code>
+									</p></li><li class="listitem"><p>
+											<code class="literal">PKCS15-UnusedSpace</code>
+									</p></li><li class="listitem"><p>
+											<code class="literal">PKCS15-PRKDF</code>
+									</p></li><li class="listitem"><p>
+											<code class="literal">PKCS15-PUKDF</code>
+									</p></li><li class="listitem"><p>
+											<code class="literal">PKCS15-PUKDF-TRUSTED</code>
+									</p></li><li class="listitem"><p>
+											<code class="literal">PKCS15-SKDF</code>
+									</p></li><li class="listitem"><p>
+											<code class="literal">PKCS15-CDF</code>
+									</p></li><li class="listitem"><p>
+											<code class="literal">PKCS15-CDF-TRUSTED</code>
+									</p></li><li class="listitem"><p>
+											<code class="literal">PKCS15-CDF-USEFUL</code>
+									</p></li><li class="listitem"><p>
+											<code class="literal">PKCS15-DODF</code>
+									</p></li><li class="listitem"><p>
+											<code class="literal">PKCS15-AODF</code>
+									</p></li></ul></div><p>
+							</p>
+							<p>
+								The <code class="literal">EF</code> block can contain:
+							</p>
+						</span></dt><dd><div class="variablelist"><dl class="variablelist"><dt><span class="term">
+										<code class="option">type = <em class="replaceable"><code>EF</code></em>;</code>
+									</span></dt><dd><p>
+											Type must match type of file.
+									</p></dd><dt><span class="term">
+										<code class="option">acl = <em class="replaceable"><code>value</code></em>;</code>
+									</span></dt><dd><p>
+											Value of ACL (Access Control List) (Default: <code class="literal">NONE</code>)
+									</p></dd><dt><span class="term">
+										<code class="option">file-id = <em class="replaceable"><code>EF</code></em>;</code>
+									</span></dt><dd><p>
+											File ID, relative path.
+									</p></dd><dt><span class="term">
+										<code class="option">structure = <em class="replaceable"><code>value</code></em>;</code>
+									</span></dt><dd><p>
+											File structure is one of:
+											</p><div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; "><li class="listitem"><p>
+														<code class="literal">TRANSPARENT</code>
+												</p></li><li class="listitem"><p>
+														<code class="literal">LINEAR-FIXED</code>
+												</p></li><li class="listitem"><p>
+														<code class="literal">LINEAR-FIXED-TLV</code>
+												</p></li><li class="listitem"><p>
+														<code class="literal">LINEAR-VARIABLE</code>
+												</p></li><li class="listitem"><p>
+														<code class="literal">LINEAR-VARIABLE-TLV</code>
+												</p></li><li class="listitem"><p>
+														<code class="literal">CYCLIC</code>
+												</p></li><li class="listitem"><p>
+														<code class="literal">CYCLIC-TLV</code>
+												</p></li></ul></div><p>
+									</p></dd></dl></div></dd><dt><span class="term">
+							<code class="option">DF <em class="replaceable"><code>name</code></em> {
+								<em class="replaceable"><code>block_contents</code></em>
+								}
+							</code>
+							<p>
+								This block defines directory file in PKCS#15 file hierarchy.
+								The name can be one of:
+								</p><div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; "><li class="listitem"><p>
+											<code class="literal">MF</code>
+									</p></li><li class="listitem"><p>
+											<code class="literal">PKCS15-AppDF</code>
+									</p></li><li class="listitem"><p>
+											Special cases for those DFs handled separately by the PKCS15 logic
+									</p></li></ul></div><p>
+							</p>
+							<p>
+								The <code class="literal">DF</code> block can contain:
+							</p>
+						</span></dt><dd><div class="variablelist"><dl class="variablelist"><dt><span class="term">
+										<code class="option">type = <em class="replaceable"><code>DF</code></em>;</code>
+									</span></dt><dd><p>
+											Type must match type of file.
+									</p></dd><dt><span class="term">
+										<code class="option">path = <em class="replaceable"><code>value</code></em>;</code>
+									</span></dt><dd><p>
+											Specification of path of the directory file.
+									</p></dd><dt><span class="term">
+										<code class="option">file-id = <em class="replaceable"><code>value</code></em>;</code>
+									</span></dt><dd><p>
+											File ID, relative path.
+									</p></dd><dt><span class="term">
+										<code class="option">aid = <em class="replaceable"><code>value</code></em>;</code>
+									</span></dt><dd><p>
+											Value of AID, in <code class="literal">XX:XX:XX:...:XX:XX:XX</code> notation.
+									</p></dd><dt><span class="term">
+										<code class="option">acl = <em class="replaceable"><code>value</code></em>;</code>
+									</span></dt><dd><p>
+											Type must match type of file.
+									</p></dd><dt><span class="term">
+										<code class="option">size = <em class="replaceable"><code>int</code></em>;</code>
+									</span></dt><dd><p>
+											Size of the file in bytes.
+									</p></dd><dt><span class="term">
+										<code class="option">EF <em class="replaceable"><code>name</code></em> { block_contents }</code>
+									</span></dt><dd><p>
+											Block specifying nested elementary file.
+									</p></dd></dl></div><p>
+							Typically, the root <code class="literal">DF</code> is <code class="literal">MF</code>.
+						</p><p>
+							It is mandatory that profile file contains <code class="literal">DF</code> entry for <code class="literal">MF</code> (Master File).
+							Otherwise the profile file is incomplete and cannot be used.
+						</p></dd></dl></div><p>
+					The <code class="literal">DF</code> can contain other <code class="literal">DF</code> or <code class="literal">MF</code> blocks.
+					For examples how the filesystem structure may look like,
+					please refer to <code class="literal">pkcs15.profile</code> or any other present profile file.
+				</p></div></div></div><div class="refsect1"><a name="id-1.3.5"></a><h2>See also</h2><p>
 			<span class="citerefentry"><span class="refentrytitle">pkcs15-init</span>(1)</span>,
 			<span class="citerefentry"><span class="refentrytitle">pkcs15-crypt</span>(1)</span>
 		</p></div></div></div></body></html>

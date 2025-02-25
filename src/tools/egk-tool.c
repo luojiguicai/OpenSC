@@ -15,7 +15,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 #ifdef HAVE_CONFIG_H
 #include "config.h"
@@ -34,6 +34,22 @@
 #include <fcntl.h>
 #endif
 
+/*
+ * References:
+ *
+ * Speicherstrukturen der eGK für Gesundheitsanwendungen version 1.6.0 from 18.03.2008
+ * https://fachportal.gematik.de/fileadmin/user_upload/fachportal/files/Spezifikationen/Basis-Rollout/Elektronische_Gesundheitskarte/gematik_eGK_Speicherstrukturen_V1_6_0.pdf
+ *
+ * Spezifikation der elektronischen Gesundheitskarte eGK-Objektsystem version 4.5.0 from 02.10.2019
+ * https://fachportal.gematik.de/fachportal-import/files/gemSpec_eGK_ObjSys_G2_1_V4.5.0.pdf
+ *
+ * Speicherstrukturen der eGK für die Fachanwendung VSDM version 1.2.1 from 19.02.2021
+ * https://fachportal.gematik.de/fachportal-import/files/gemSpec_eGK_Fach_VSDM_V1.2.1.pdf
+ *
+ * Speicherstrukturen der eGK für die Fachanwendung AMTS version 1.2.0 from 26.10.2018
+ * https://www.vesta-gematik.de/standard/formhandler/324/gemSpec_eGK_Fach_AMTS_V1_2_0.pdf
+ */
+
 #ifdef ENABLE_ZLIB
 #include <zlib.h>
 
@@ -43,19 +59,21 @@ int uncompress_gzip(void* uncompressed, size_t *uncompressed_len,
 	z_stream stream;
 	memset(&stream, 0, sizeof stream);
 	stream.total_in = compressed_len;
-	stream.avail_in = compressed_len;
+	stream.avail_in = (unsigned)compressed_len;
 	stream.total_out = *uncompressed_len;
-	stream.avail_out = *uncompressed_len;
+	stream.avail_out = (unsigned)*uncompressed_len;
 	stream.next_in = (Bytef *) compressed;
 	stream.next_out = (Bytef *) uncompressed;
 
 	/* 15 window bits, and the +32 tells zlib to to detect if using gzip or zlib */
-	if (Z_OK == inflateInit2(&stream, (15 + 32))
-			&& Z_STREAM_END == inflate(&stream, Z_FINISH)) {
-		*uncompressed_len = stream.total_out;
-	} else {
+	if (inflateInit2(&stream, (15 + 32)) != Z_OK) {
 		return SC_ERROR_INVALID_DATA;
 	}
+	if (inflate(&stream, Z_FINISH) != Z_STREAM_END) {
+		inflateEnd(&stream);
+		return SC_ERROR_INVALID_DATA;
+	}
+	*uncompressed_len = stream.total_out;
 	inflateEnd(&stream);
 
 	return SC_SUCCESS;
@@ -157,6 +175,9 @@ main (int argc, char **argv)
 	memset(&ctx_param, 0, sizeof(ctx_param));
 	ctx_param.ver      = 0;
 	ctx_param.app_name = app_name;
+	ctx_param.debug    = cmdline.verbose_given;
+	if (cmdline.verbose_given > 1)
+		ctx_param.debug_file = stderr;
 
 	r = sc_context_create(&ctx, &ctx_param);
 	if (r) {
@@ -164,12 +185,7 @@ main (int argc, char **argv)
 		exit(1);
 	}
 
-	if (cmdline.verbose_given > 1) {
-		ctx->debug = cmdline.verbose_given;
-		sc_ctx_log_to_file(ctx, "stderr");
-	}
-
-	r = util_connect_card_ex(ctx, &card, cmdline.reader_arg, 0, 0, cmdline.verbose_given);
+	r = util_connect_card_ex(ctx, &card, cmdline.reader_arg, 0, 0);
 	if (r)
 		goto err;
 
@@ -179,7 +195,7 @@ main (int argc, char **argv)
 		goto err;
 
 	if (cmdline.pd_flag
-			&& read_file(card, "D001", &data, &data_len)
+			&& read_file(card, "iD001", &data, &data_len)
 			&& data_len >= 2) {
 		size_t len_pd = (data[0] << 8) | data[1];
 
@@ -197,7 +213,7 @@ main (int argc, char **argv)
 	}
 
 	if ((cmdline.vd_flag || cmdline.gvd_flag)
-			&& read_file(card, "D002", &data, &data_len)
+			&& read_file(card, "iD002", &data, &data_len)
 			&& data_len >= 8) {
 		size_t off_vd  = (data[0] << 8) | data[1];
 		size_t end_vd  = (data[2] << 8) | data[3];
@@ -232,7 +248,7 @@ main (int argc, char **argv)
 	}
 
 	if (cmdline.vsd_status_flag
-			&& read_file(card, "D00C", &data, &data_len)
+			&& read_file(card, "iD00C", &data, &data_len)
 			&& data_len >= 25) {
 		char *status;
 		unsigned int major, minor, fix;

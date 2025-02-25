@@ -2,6 +2,14 @@
 
 set -ex -o xtrace
 
+if [ -z "$GH_TOKEN" ]; then
+    exit 0
+fi
+
+# Check the GH_TOKEN is not expired
+curl --fail --silent -XGET -H "authorization: token $GH_TOKEN" 'https://api.github.com/repos/OpenSC/Nightly' || \
+	( echo "The GH_TOKEN is expired -- please renew it!"; exit 1 )
+
 BUILDPATH=${PWD}
 BRANCH="`git log --max-count=1 --date=short --abbrev=8 --pretty=format:"%cd_%h"`"
 
@@ -29,7 +37,7 @@ git commit --message "$1"
 i=0
 while [ $i -le 10 ] && ! git push --quiet --set-upstream origin "${BRANCH}"
 do
-    sleep $[ ( $RANDOM % 32 )  + 1 ]s
+    sleep $[ ( $RANDOM % 32 )  + 1 ]
     git pull --rebase origin --strategy-option ours "${BRANCH}"
     i=$(( $i + 1 ))
 done

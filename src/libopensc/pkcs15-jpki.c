@@ -15,10 +15,10 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#if HAVE_CONFIG_H
+#ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
 
@@ -90,8 +90,10 @@ sc_pkcs15emu_jpki_init(sc_pkcs15_card_t * p15card)
 		cert_info.authority = jpki_cert_authority[i];
 		cert_obj.flags = jpki_cert_flags[i];
 		rc = sc_pkcs15emu_add_x509_cert(p15card, &cert_obj, &cert_info);
-		if (rc < 0)
+		if (rc < 0) {
+			sc_pkcs15_card_clear(p15card);
 			LOG_FUNC_RETURN(card->ctx, SC_ERROR_INTERNAL);
+		}
 
 	}
 
@@ -146,8 +148,10 @@ sc_pkcs15emu_jpki_init(sc_pkcs15_card_t * p15card)
 		pin_obj.flags = jpki_pin_flags[i];
 
 		rc = sc_pkcs15emu_add_pin_obj(p15card, &pin_obj, &pin_info);
-		if (rc < 0)
+		if (rc < 0) {
+			sc_pkcs15_card_clear(p15card);
 			LOG_FUNC_RETURN(card->ctx, SC_ERROR_INTERNAL);
+		}
 	}
 
 	/* add private keys */
@@ -182,8 +186,10 @@ sc_pkcs15emu_jpki_init(sc_pkcs15_card_t * p15card)
 		prkey_obj.flags = SC_PKCS15_CO_FLAG_PRIVATE;
 
 		rc = sc_pkcs15emu_add_rsa_prkey(p15card, &prkey_obj, &prkey_info);
-		if (rc < 0)
+		if (rc < 0) {
+			sc_pkcs15_card_clear(p15card);
 			LOG_FUNC_RETURN(card->ctx, SC_ERROR_INTERNAL);
+		}
 	}
 
 	/* add public keys */
@@ -193,6 +199,10 @@ sc_pkcs15emu_jpki_init(sc_pkcs15_card_t * p15card)
 			"User Authentication Public Key",
 			"Digital Signature Public Key"
 		};
+		static int jpki_pubkey_flags[2] = {
+				0,
+				SC_PKCS15_CO_FLAG_PRIVATE};
+		static int jpki_pubkey_auth_id[2] = {0, 2};
 		struct sc_pkcs15_pubkey_info pubkey_info;
 		struct sc_pkcs15_object pubkey_obj;
 		static char const *jpki_pubkey_paths[2] = {
@@ -211,10 +221,15 @@ sc_pkcs15emu_jpki_init(sc_pkcs15_card_t * p15card)
 
 		sc_format_path(jpki_pubkey_paths[i], &pubkey_info.path);
 		pubkey_info.path.type = SC_PATH_TYPE_FILE_ID;
+		pubkey_obj.flags = jpki_pubkey_flags[i];
+		pubkey_obj.auth_id.len = 1;
+		pubkey_obj.auth_id.value[0] = jpki_pubkey_auth_id[i];
 
 		rc = sc_pkcs15emu_add_rsa_pubkey(p15card, &pubkey_obj, &pubkey_info);
-		if (rc < 0)
+		if (rc < 0) {
+			sc_pkcs15_card_clear(p15card);
 			LOG_FUNC_RETURN(card->ctx, SC_ERROR_INTERNAL);
+		}
 	}
 	LOG_FUNC_RETURN(card->ctx, SC_SUCCESS);
 }

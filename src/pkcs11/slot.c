@@ -16,7 +16,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
 #include "config.h"
@@ -69,13 +69,15 @@ static struct sc_pkcs11_slot * reader_reclaim_slot(sc_reader_t *reader)
 	CK_UTF8CHAR slotDescription[64];
 	CK_UTF8CHAR manufacturerID[32];
 
+	if (reader == NULL)
+		return NULL;
 	strcpy_bp(slotDescription, reader->name, 64);
 	strcpy_bp(manufacturerID, reader->vendor, 32);
 
 	/* Locate a slot related to the reader */
 	for (i = 0; i<list_size(&virtual_slots); i++) {
 		sc_pkcs11_slot_t *slot = (sc_pkcs11_slot_t *) list_get_at(&virtual_slots, i);
-		if (slot->reader == NULL && reader != NULL
+		if (slot->reader == NULL
 				&& 0 == memcmp(slot->slot_info.slotDescription, slotDescription, 64)
 				&& 0 == memcmp(slot->slot_info.manufacturerID, manufacturerID, 32)
 				&& slot->slot_info.hardwareVersion.major == reader->version_major
@@ -213,6 +215,7 @@ CK_RV card_detect(sc_reader_t *reader)
 	CK_RV rv;
 	unsigned int i;
 	int j;
+	static int retry = 3;
 
 	sc_log(context, "%s: Detecting smart card", reader->name);
 	/* Check if someone inserted a card */
@@ -233,10 +236,12 @@ again:
 		sc_log(context, "%s: Card changed", reader->name);
 		/* The following should never happen - but if it
 		 * does we'll be stuck in an endless loop.
-		 * So better be fussy.
-		if (!retry--)
-			return CKR_TOKEN_NOT_PRESENT; */
+		 * So better be fussy.*/
 		card_removed(reader);
+		if (!retry--) {
+			retry = 3;
+			return CKR_TOKEN_NOT_PRESENT;
+		}
 		goto again;
 	}
 
@@ -524,6 +529,7 @@ CK_RV slot_token_removed(CK_SLOT_ID id)
 	/* Reset relevant slot properties */
 	slot->slot_info.flags &= ~CKF_TOKEN_PRESENT;
 	slot->login_user = -1;
+	slot->profile = NULL;
 	pop_all_login_states(slot);
 
 	if (token_was_present)

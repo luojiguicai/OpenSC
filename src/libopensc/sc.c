@@ -15,10 +15,10 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#if HAVE_CONFIG_H
+#ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
 
@@ -54,7 +54,6 @@ static const char *sc_version = "(undef)";
 #define PAGESIZE 0
 #endif
 #endif
-static size_t page_size = PAGESIZE;
 
 const char *sc_get_version(void)
 {
@@ -82,8 +81,13 @@ int sc_hex_to_bin(const char *in, u8 *out, size_t *outlen)
 		else if ('A' <= c && c <= 'F')
 			nibble = c - 'A' + 10;
 		else {
-			if (strchr(sc_hex_to_bin_separators, (int) c))
+			if (strchr(sc_hex_to_bin_separators, (int) c)) {
+				if (byte_needs_nibble) {
+					r = SC_ERROR_INVALID_ARGUMENTS;
+					goto err;
+				}
 				continue;
+			}
 			r = SC_ERROR_INVALID_ARGUMENTS;
 			goto err;
 		}
@@ -270,7 +274,7 @@ int sc_format_oid(struct sc_object_id *oid, const char *in)
 
 	p = in;
 	for (ii=0; ii < SC_MAX_OBJECT_ID_OCTETS; ii++)   {
-		oid->value[ii] = strtol(p, &q, 10);
+		oid->value[ii] = (int)strtol(p, &q, 10);
 		if (!*q)
 			break;
 
@@ -337,6 +341,12 @@ int sc_detect_card_presence(sc_reader_t *reader)
 		LOG_FUNC_RETURN(reader->ctx, SC_ERROR_NOT_SUPPORTED);
 
 	r = reader->ops->detect_card_presence(reader);
+
+	// Check that we get sane return value from backend
+	// detect_card_presence should return 0 if no card is present.
+	if (r && !(r & SC_READER_CARD_PRESENT))
+		LOG_FUNC_RETURN(reader->ctx, SC_ERROR_INTERNAL);
+
 	LOG_FUNC_RETURN(reader->ctx, r);
 }
 
@@ -535,7 +545,7 @@ int sc_file_add_acl_entry(sc_file_t *file, unsigned int operation,
 	if (_new == NULL)
 		return SC_ERROR_OUT_OF_MEMORY;
 	_new->method = method;
-	_new->key_ref = key_ref;
+	_new->key_ref = (unsigned)key_ref;
 	_new->next = NULL;
 
 	p = file->acl[operation];
@@ -886,40 +896,20 @@ int _sc_parse_atr(sc_reader_t *reader)
 	return SC_SUCCESS;
 }
 
-static void init_page_size()
-{
-	if (page_size == 0) {
-#ifdef _WIN32
-		SYSTEM_INFO system_info;
-		GetSystemInfo(&system_info);
-		page_size = system_info.dwPageSize;
-#else
-		page_size = sysconf(_SC_PAGESIZE);
-		if ((long) page_size < 0) {
-			page_size = 0;
-		}
-#endif
-	}
-}
-
 void *sc_mem_secure_alloc(size_t len)
 {
 	void *p;
 
-	init_page_size();
-	if (page_size > 0) {
-		size_t pages = (len + page_size - 1) / page_size;
-		len = pages * page_size;
-	}
-
-	p = calloc(1, len);
-	if (p == NULL) {
-		return NULL;
-	}
 #ifdef _WIN32
-	VirtualLock(p, len);
+	p = VirtualAlloc(NULL, len, MEM_COMMIT, PAGE_READWRITE);
+	if (p != NULL) {
+		VirtualLock(p, len);
+	}
 #else
-	mlock(p, len);
+	p = mmap(NULL, len, PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+	if (p != NULL) {
+		mlock(p, len);
+	}
 #endif
 
 	return p;
@@ -929,10 +919,11 @@ void sc_mem_secure_free(void *ptr, size_t len)
 {
 #ifdef _WIN32
 	VirtualUnlock(ptr, len);
+	VirtualFree(ptr, 0, MEM_RELEASE);
 #else
 	munlock(ptr, len);
+	munmap(ptr, len);
 #endif
-	free(ptr);
 }
 
 void sc_mem_clear(void *ptr, size_t len)

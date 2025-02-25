@@ -15,7 +15,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
 #include "config.h"
@@ -27,11 +27,6 @@
 #endif
 #include <errno.h>
 #include <string.h>
-#ifdef ENABLE_OPENSSL
-#include <openssl/evp.h>
-#include <openssl/rsa.h>
-#include <openssl/dsa.h>
-#endif
 
 #include "common/compat_getpass.h"
 #include "libopensc/internal.h"
@@ -106,7 +101,7 @@ static const char *option_help[] = {
 	"Uses password (PIN) <arg> (use - for reading PIN from STDIN)",
 	"Specify AID of the on-card PKCS#15 application to be binded to (in hexadecimal form)",
 	"Wait for card insertion",
-	"Verbose operation. Use several times to enable debug output.",
+	"Verbose operation, may be used several times",
 };
 
 static sc_context_t *ctx = NULL;
@@ -161,10 +156,10 @@ static char * get_pin(struct sc_pkcs15_object *obj)
 	}
 }
 
-static int read_input(u8 *buf, int buflen)
+static size_t read_input(u8 *buf, int buflen)
 {
 	FILE *inf;
-	int c;
+	size_t c;
 
 	if (opt_input==NULL) {
 		inf = stdin;
@@ -172,21 +167,21 @@ static int read_input(u8 *buf, int buflen)
 		inf = fopen(opt_input, "rb");
 		if (inf == NULL) {
 			fprintf(stderr, "Unable to open '%s' for reading.\n", opt_input);
-			return -1;
+			return 0;
 		}
 	}
 	c = fread(buf, 1, buflen, inf);
 	if (inf!=stdin) {
 		fclose(inf);
 	}
-	if (c < 0) {
+	if (c <= 0) {
 		perror("read");
-		return -1;
+		return 0;
 	}
 	return c;
 }
 
-static int write_output(const u8 *buf, int len)
+static int write_output(const u8 *buf, size_t len)
 {
 	FILE *outf;
 	int output_binary = (opt_output == NULL && opt_raw == 0 ? 0 : 1);
@@ -215,18 +210,19 @@ static int sign(struct sc_pkcs15_object *obj)
 {
 	u8 buf[1024], out[1024];
 	struct sc_pkcs15_prkey_info *key = (struct sc_pkcs15_prkey_info *) obj->data;
-	int r, c, len;
+	int r, flags;
+	size_t c, len;
 
 	if (opt_input == NULL) {
 		fprintf(stderr, "No input file specified. Reading from stdin\n");
 	}
 
 	c = read_input(buf, sizeof(buf));
-	if (c < 0)
+	if (c <= 0)
 		return 2;
 	len = sizeof(out);
 	if (obj->type == SC_PKCS15_TYPE_PRKEY_RSA
-			&& !(opt_crypt_flags & SC_ALGORITHM_RSA_PAD_PKCS1)
+			&& !(opt_crypt_flags & SC_ALGORITHM_RSA_PAD_PKCS1_TYPE_01)
 			&& (size_t)c != key->modulus_length/8) {
 		fprintf(stderr, "Input has to be exactly %lu bytes, when using no padding.\n",
 			(unsigned long) key->modulus_length/8);
@@ -237,7 +233,8 @@ static int sign(struct sc_pkcs15_object *obj)
 		return SC_ERROR_NOT_SUPPORTED;
 	}
 
-	r = sc_pkcs15_compute_signature(p15card, obj, opt_crypt_flags, buf, c, out, len);
+	flags = opt_crypt_flags & ~SC_ALGORITHM_RSA_PAD_PKCS1_TYPE_02;
+	r = sc_pkcs15_compute_signature(p15card, obj, flags, buf, c, out, len, NULL);
 	if (r < 0) {
 		fprintf(stderr, "Compute signature failed: %s\n", sc_strerror(r));
 		return 1;
@@ -269,13 +266,14 @@ static int sign(struct sc_pkcs15_object *obj)
 static int decipher(struct sc_pkcs15_object *obj)
 {
 	u8 buf[1024], out[1024];
-	int r, c, len;
+	int r, len, flags;
+	size_t c;
 
 	if (opt_input == NULL) {
 		fprintf(stderr, "No input file specified. Reading from stdin\n");
 	}
 	c = read_input(buf, sizeof(buf));
-	if (c < 0)
+	if (c <= 0)
 		return 2;
 
 	len = sizeof(out);
@@ -284,7 +282,8 @@ static int decipher(struct sc_pkcs15_object *obj)
 		return SC_ERROR_NOT_SUPPORTED;
 	}
 
-	r = sc_pkcs15_decipher(p15card, obj, opt_crypt_flags & SC_ALGORITHM_RSA_PAD_PKCS1, buf, c, out, len);
+	flags = opt_crypt_flags & ~SC_ALGORITHM_RSA_PAD_PKCS1_TYPE_01;
+	r = sc_pkcs15_decipher(p15card, obj, flags, buf, c, out, len, NULL);
 	if (r < 0) {
 		fprintf(stderr, "Decrypt failed: %s\n", sc_strerror(r));
 		return 1;
@@ -343,12 +342,12 @@ static int get_key(unsigned int usage, sc_pkcs15_object_t **result)
 			free(pincode);
 			return 5;
 		}
-		
+
 		/*
 		 * Do what PKCS#11 would do for keys requiring CKA_ALWAYS_AUTHENTICATE
-		 * and CKU_CONTEXT_SPECIFIC login to let driver know this verify will be followed by 
+		 * and CKU_CONTEXT_SPECIFIC login to let driver know this verify will be followed by
 		 * a crypto operation.  Card drivers can test for SC_AC_CONTEXT_SPECIFIC
-		 * to do any special handling. 
+		 * to do any special handling.
 		 */
 		if (key->user_consent && pin) {
 			int auth_meth_saved;
@@ -389,8 +388,10 @@ int main(int argc, char *argv[])
 		c = getopt_long(argc, argv, "sck:r:i:o:f:Rp:vw", options, &long_optind);
 		if (c == -1)
 			break;
-		if (c == '?')
-			util_print_usage_and_die(app_name, options, option_help, NULL);
+		if (c == '?') {
+			util_print_usage(app_name, options, option_help, NULL);
+			return 2;
+		}
 		switch (c) {
 		case OPT_VERSION:
 			do_print_version = 1;
@@ -458,8 +459,10 @@ int main(int argc, char *argv[])
 			break;
 		}
 	}
-	if (action_count == 0)
-		util_print_usage_and_die(app_name, options, option_help, NULL);
+	if (action_count == 0) {
+		util_print_usage(app_name, options, option_help, NULL);
+		return 2;
+	}
 
 	if (do_print_version)   {
 		printf("%s\n", OPENSC_SCM_REVISION);
@@ -472,6 +475,9 @@ int main(int argc, char *argv[])
 	memset(&ctx_param, 0, sizeof(ctx_param));
 	ctx_param.ver      = 0;
 	ctx_param.app_name = app_name;
+	ctx_param.debug    = verbose;
+	if (verbose)
+		ctx_param.debug_file = stderr;
 
 	r = sc_context_create(&ctx, &ctx_param);
 	if (r) {
@@ -479,7 +485,7 @@ int main(int argc, char *argv[])
 		return 1;
 	}
 
-	err = util_connect_card_ex(ctx, &card, opt_reader, opt_wait, 0, verbose);
+	err = util_connect_card_ex(ctx, &card, opt_reader, opt_wait, 0);
 	if (err)
 		goto end;
 
@@ -491,7 +497,8 @@ int main(int argc, char *argv[])
 		aid.len = sizeof(aid.value);
 		if (sc_hex_to_bin(opt_bind_to_aid, aid.value, &aid.len))   {
 			fprintf(stderr, "Invalid AID value: '%s'\n", opt_bind_to_aid);
-			return 1;
+			err = 1;
+			goto end;
 		}
 
 		r = sc_pkcs15_bind(card, &aid, &p15card);

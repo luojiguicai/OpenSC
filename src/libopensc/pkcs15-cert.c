@@ -15,10 +15,10 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#if HAVE_CONFIG_H
+#ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
 
@@ -39,7 +39,7 @@ static int
 parse_x509_cert(sc_context_t *ctx, struct sc_pkcs15_der *der, struct sc_pkcs15_cert *cert)
 {
 	int r;
-	struct sc_algorithm_id sig_alg;
+	struct sc_algorithm_id sig_alg = {0};
 	struct sc_pkcs15_pubkey *pubkey = NULL;
 	unsigned char *serial = NULL, *issuer = NULL, *subject = NULL, *buf =  der->value;
 	size_t serial_len = 0, issuer_len = 0, subject_len = 0, data_len = 0, buflen = der->len;
@@ -169,7 +169,7 @@ sc_pkcs15_get_name_from_dn(struct sc_context *ctx, const u8 *dn, size_t dn_len,
 	for (next_ava = rdn, next_ava_len = rdn_len; next_ava_len; ) {
 		const u8 *ava, *dummy, *oidp;
 		struct sc_object_id oid;
-		size_t ava_len, dummy_len, oid_len;
+		size_t ava_len = 0, dummy_len, oid_len = 0;
 
 		/* unwrap the set and point to the next ava */
 		ava = sc_asn1_skip_tag(ctx, &next_ava, &next_ava_len, SC_ASN1_TAG_SET | SC_ASN1_CONS, &ava_len);
@@ -300,7 +300,7 @@ sc_pkcs15_get_extension(struct sc_context *ctx, struct sc_pkcs15_cert *cert,
 			if (is_critical)
 				*is_critical = critical;
 
-			r = val_len;
+			r = (int)val_len;
 			LOG_FUNC_RETURN(ctx, r);
 		}
 		if (val) {
@@ -367,7 +367,7 @@ sc_pkcs15_pubkey_from_cert(struct sc_context *ctx,
 
 int
 sc_pkcs15_read_certificate(struct sc_pkcs15_card *p15card, const struct sc_pkcs15_cert_info *info,
-		struct sc_pkcs15_cert **cert_out)
+		int private_obj, struct sc_pkcs15_cert **cert_out)
 {
 	struct sc_context *ctx = NULL;
 	struct sc_pkcs15_cert *cert = NULL;
@@ -384,7 +384,7 @@ sc_pkcs15_read_certificate(struct sc_pkcs15_card *p15card, const struct sc_pkcs1
 		sc_der_copy(&der, &info->value);
 	}
 	else if (info->path.len) {
-		r = sc_pkcs15_read_file(p15card, &info->path, &der.value, &der.len);
+		r = sc_pkcs15_read_file(p15card, &info->path, &der.value, &der.len, private_obj);
 		LOG_TEST_RET(ctx, r, "Unable to read certificate file.");
 	}
 	else   {
@@ -501,7 +501,7 @@ sc_pkcs15_decode_cdf_entry(struct sc_pkcs15_card *p15card, struct sc_pkcs15_obje
 	}
 	sc_log(ctx, "Certificate path '%s'", sc_print_path(&info.path));
 
-	switch (p15card->opts.private_certificate) {
+	switch (p15card->opts.pin_protected_certificate) {
 		case SC_PKCS15_CARD_OPTS_PRIV_CERT_DECLASSIFY:
 			sc_log(ctx, "Declassifying certificate");
 			obj->flags &= ~SC_PKCS15_CO_FLAG_PRIVATE;
@@ -564,7 +564,7 @@ sc_pkcs15_encode_cdf_entry(sc_context_t *ctx, const struct sc_pkcs15_object *obj
  * the public and private key usages
  */
 static unsigned int
-sc_pkcs15_alg_flags_from_algorithm(int algorithm)
+sc_pkcs15_alg_flags_from_algorithm(unsigned long algorithm)
 {
 	switch (algorithm) {
 	case SC_ALGORITHM_RSA:
@@ -572,9 +572,6 @@ sc_pkcs15_alg_flags_from_algorithm(int algorithm)
 		       SC_PKCS15_PRKEY_USAGE_VERIFY | SC_PKCS15_PRKEY_USAGE_VERIFYRECOVER |
 		       SC_PKCS15_PRKEY_USAGE_DECRYPT | SC_PKCS15_PRKEY_USAGE_UNWRAP |
 		       SC_PKCS15_PRKEY_USAGE_SIGN | SC_PKCS15_PRKEY_USAGE_SIGNRECOVER |
-		       SC_PKCS15_PRKEY_USAGE_NONREPUDIATION;
-	case SC_ALGORITHM_DSA:
-		return SC_PKCS15_PRKEY_USAGE_VERIFY| SC_PKCS15_PRKEY_USAGE_SIGN |
 		       SC_PKCS15_PRKEY_USAGE_NONREPUDIATION;
 #ifdef SC_ALGORITHM_DH
 	case SC_ALGORITHM_DH:
@@ -609,7 +606,7 @@ sc_pkcs15_alg_flags_from_algorithm(int algorithm)
 
 /* map a cert usage and algorithm to public and private key usages */
 int
-sc_pkcs15_map_usage(unsigned int cert_usage, int algorithm,
+sc_pkcs15_map_usage(unsigned int cert_usage, unsigned long algorithm,
 	unsigned int *pub_usage_ptr, unsigned int *pr_usage_ptr,
 	int allow_nonrepudiation)
 {

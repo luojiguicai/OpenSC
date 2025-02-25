@@ -16,7 +16,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
 #include "config.h"
@@ -38,6 +38,10 @@
 #include <openssl/conf.h>
 
 #include <openssl/rsa.h>
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+# include <openssl/param_build.h>
+# include <openssl/params.h>
+#endif
 #if !defined(OPENSSL_NO_EC) && !defined(OPENSSL_NO_ECDSA)
 #include <openssl/ec.h>
 #include <openssl/ecdsa.h>
@@ -54,6 +58,7 @@
 #include "libopensc/cardctl.h"
 #include "libopensc/cards.h"
 #include "libopensc/asn1.h"
+#include "libopensc/log.h"
 #include "util.h"
 #include "libopensc/sc-ossl-compat.h"
 
@@ -99,7 +104,7 @@ static const char *option_help[] = {
 	"Sends an APDU in format AA:BB:CC:DD:EE:FF...",
 	"Uses reader number <arg> [0]",
 	"Wait for a card to be inserted",
-	"Verbose operation. Use several times to enable debug output.",
+	"Verbose operation, may be used several times",
 };
 
 static sc_context_t *ctx = NULL;
@@ -118,14 +123,14 @@ static int load_object(const char * object_id, const char * object_file)
 	int r = -1;
 	struct stat stat_buf;
 
-    if(!object_file || (fp=fopen(object_file, "rb")) == NULL){
-        printf("Cannot open object file, %s %s\n",
-			(object_file)?object_file:"", strerror(errno));
+	if (!object_file || (fp = fopen(object_file, "rb")) == NULL) {
+		printf("Cannot open object file, %s %s\n",
+				(object_file) ? object_file : "", strerror(errno));
 		goto err;
-    }
+	}
 
 	if (0 != stat(object_file, &stat_buf)) {
-		printf("unable to read file %s\n",object_file);
+		printf("unable to read file %s\n", object_file);
 		goto err;
 	}
 	derlen = stat_buf.st_size;
@@ -141,7 +146,7 @@ static int load_object(const char * object_id, const char * object_file)
 	}
 	/* check if tag and length are valid */
 	body = (u8 *)sc_asn1_find_tag(card->ctx, der, derlen, 0x53, &bodylen);
-	if (body == NULL || derlen != body  - der +  bodylen) {
+	if (body == NULL || derlen != body - der + bodylen) {
 		fprintf(stderr, "object tag or length not valid\n");
 		goto err;
 	}
@@ -180,20 +185,20 @@ static int load_cert(const char * cert_id, const char * cert_file,
 	int r = -1;
 
 	if (!cert_file) {
-        printf("Missing cert file\n");
+		printf("Missing cert file\n");
 		goto err;
 	}
 
-    if((fp=fopen(cert_file, "rb"))==NULL){
-        printf("Cannot open cert file, %s %s\n",
+	if ((fp = fopen(cert_file, "rb")) == NULL) {
+		printf("Cannot open cert file, %s %s\n",
 				cert_file, strerror(errno));
-        goto err;
-    }
+		goto err;
+	}
 	if (compress) { /* file is gzipped already */
 		struct stat stat_buf;
 
 		if (0 != stat(cert_file, &stat_buf)) {
-			printf("unable to read file %s\n",cert_file);
+			printf("unable to read file %s\n", cert_file);
 			goto err;
 		}
 		derlen = stat_buf.st_size;
@@ -204,16 +209,16 @@ static int load_cert(const char * cert_id, const char * cert_file,
 			goto err;
 		}
 		if (1 != fread(der, derlen, 1, fp)) {
-			printf("unable to read file %s\n",cert_file);
+			printf("unable to read file %s\n", cert_file);
 			goto err;
 		}
 	} else {
 		cert = PEM_read_X509(fp, &cert, NULL, NULL);
-    	if(cert == NULL){
-        	printf("file %s does not contain PEM-encoded certificate\n",
-				 cert_file);
-        	goto err;
-    	}
+		if (cert == NULL) {
+			sc_log_openssl(ctx);
+			printf("file %s does not contain PEM-encoded certificate\n", cert_file);
+			goto err;
+		}
 
 		derlen = i2d_X509(cert, NULL);
 		der = malloc(derlen);
@@ -243,7 +248,7 @@ static int load_cert(const char * cert_id, const char * cert_file,
 	}
 	/* we pass length  and  8 bits of flag to card-piv.c write_binary */
 	/* pass in its a cert and if needs compress */
-	r = sc_write_binary(card, 0, der, derlen, (derlen<<8) | (compress<<4) | 1);
+	r = sc_write_binary(card, 0, der, derlen, (derlen << 8) | (compress << 4) | 1);
 
 err:
 	free(der);
@@ -265,7 +270,6 @@ static int admin_mode(const char* admin_info)
 			(sc_hex_to_bin(admin_info+2, opts+1, &buflen) == 0) &&
 			buflen == 2) {
 		opts[0] = admin_info[0];
-
 	} else {
 		fprintf(stderr, " admin_mode params <M|A>:<keyref>:<alg>\n");
 		return -1;
@@ -284,9 +288,7 @@ static int gen_key(const char * key_info)
 	u8 buf[2];
 	size_t buflen = 2;
 	sc_cardctl_piv_genkey_info_t
-		keydata = {0, 0, 0, 0, NULL, 0, NULL, 0, NULL, 0};
-	unsigned long expl;
-	u8 expc[4];
+		keydata = {0, 0, 0, NULL, 0, NULL, 0, NULL, 0, NULL, 0};
 #if !defined(OPENSSL_NO_EC)
 	int nid = -1;
 #endif
@@ -318,6 +320,14 @@ static int gen_key(const char * key_info)
 		case 0x14: keydata.key_bits = 0;
 			nid = NID_secp384r1;
 			break;
+		case 0xE0:
+			keydata.key_bits = 0;
+			nid = NID_ED25519;
+			break;
+		case 0xE1:
+			keydata.key_bits = 0;
+			nid = NID_X25519;
+			break;
 #endif
 		default:
 			fprintf(stderr, "<keyref>:<algid> algid=RSA - 05, 06, 07 for 3072, 1024, 2048;EC - 11, 14 for 256, 384\n");
@@ -333,74 +343,272 @@ static int gen_key(const char * key_info)
 		return r;
 	}
 
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
 	evpkey = EVP_PKEY_new();
+	if (!evpkey) {
+		sc_log_openssl(ctx);
+		fprintf(stderr, "allocation of key failed\n");
+		return r;
+	}
+#endif
 
 	if (keydata.key_bits > 0) { /* RSA key */
-		RSA * newkey = NULL;
 		BIGNUM *newkey_n, *newkey_e;
-
-		newkey = RSA_new();
-		if (newkey == NULL) {
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
+		RSA *newkey = RSA_new();
+		if (!newkey) {
+			sc_log_openssl(ctx);
+			EVP_PKEY_free(evpkey);
+			free(keydata.pubkey);
+			free(keydata.exponent);
 			fprintf(stderr, "gen_key RSA_new failed %d\n",r);
 			return -1;
 		}
-		newkey_n = BN_bin2bn(keydata.pubkey, keydata.pubkey_len, NULL);
-		expl = keydata.exponent;
-		expc[3] = (u8) expl & 0xff;
-		expc[2] = (u8) (expl >>8) & 0xff;
-		expc[1] = (u8) (expl >>16) & 0xff;
-		expc[0] = (u8) (expl >>24) & 0xff;
-		newkey_e =  BN_bin2bn(expc, 4, NULL);
+#else
+		EVP_PKEY_CTX *cctx = NULL;
+		OSSL_PARAM_BLD *bld = NULL;
+		OSSL_PARAM *params = NULL;
+#endif
 
+		if (!keydata.pubkey || !keydata.exponent) {
+			fprintf(stderr, "gen_key failed %d\n", r);
+			free(keydata.pubkey);
+			free(keydata.exponent);
+			EVP_PKEY_free(evpkey);
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
+			RSA_free(newkey);
+#endif
+			return -1;
+		}
+
+		newkey_n = BN_bin2bn(keydata.pubkey, (int)keydata.pubkey_len, NULL);
+		newkey_e = BN_bin2bn(keydata.exponent, (int)keydata.exponent_len, NULL);
+		free(keydata.pubkey);
+		keydata.pubkey_len = 0;
+		free(keydata.exponent);
+		keydata.exponent_len = 0;
+		if (!newkey_n || !newkey_e) {
+			sc_log_openssl(ctx);
+			EVP_PKEY_free(evpkey);
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
+			RSA_free(newkey);
+#endif
+			fprintf(stderr, "conversion or key params failed %d\n", r);
+			return -1;
+		}
+
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
 		if (RSA_set0_key(newkey, newkey_n, newkey_e, NULL) != 1) {
+			sc_log_openssl(ctx);
+			EVP_PKEY_free(evpkey);
+			RSA_free(newkey);
+			BN_free(newkey_n);
+			BN_free(newkey_e);
 			fprintf(stderr, "gen_key unable to set RSA values");
 			return -1;
 		}
 
 		if (verbose)
-			RSA_print_fp(stdout, newkey,0);
+			RSA_print_fp(stdout, newkey, 0);
 
-		EVP_PKEY_assign_RSA(evpkey, newkey);
+		if (EVP_PKEY_assign_RSA(evpkey, newkey) != 1) {
+			sc_log_openssl(ctx);
+			EVP_PKEY_free(evpkey);
+			RSA_free(newkey);
+			BN_free(newkey_n);
+			BN_free(newkey_e);
+			fprintf(stderr, "gen_key unable to set RSA values");
+			return -1;
+		}
+#else
+		if (!(bld = OSSL_PARAM_BLD_new()) ||
+				OSSL_PARAM_BLD_push_BN(bld, "n", newkey_n) != 1 ||
+				OSSL_PARAM_BLD_push_BN(bld, "e", newkey_e) != 1 ||
+				!(params = OSSL_PARAM_BLD_to_param(bld))) {
+			sc_log_openssl(ctx);
+			OSSL_PARAM_BLD_free(bld);
+			BN_free(newkey_n);
+			BN_free(newkey_e);
+			return -1;
+		}
 
+		BN_free(newkey_n);
+		BN_free(newkey_e);
+
+		cctx = EVP_PKEY_CTX_new_from_name(NULL, "RSA", NULL);
+		if (!cctx ||
+				EVP_PKEY_fromdata_init(cctx) != 1 ||
+				EVP_PKEY_fromdata(cctx, &evpkey, EVP_PKEY_KEYPAIR, params) != 1) {
+			sc_log_openssl(ctx);
+			EVP_PKEY_CTX_free(cctx);
+			OSSL_PARAM_free(params);
+			fprintf(stderr, "gen_key unable to gen RSA");
+			return -1;
+		}
+		if (verbose)
+			EVP_PKEY_print_public_fp(stdout, evpkey, 0, NULL);
+
+		EVP_PKEY_CTX_free(cctx);
+		OSSL_PARAM_free(params);
+#endif
+
+#ifdef EVP_PKEY_ED25519
+	} else if (nid == NID_ED25519 || nid == NID_X25519) {
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
+		fprintf(stderr, "This build of OpenSSL does not support ED25519 or X25519 keys\n");
+		return -1;
+#else
+		evpkey = EVP_PKEY_new_raw_public_key(nid, NULL, keydata.ecpoint, keydata.ecpoint_len);
+		if (!evpkey) {
+			sc_log_openssl(ctx);
+			fprintf(stderr, "gen key failed ti copy 25519 pubkey\n");
+			return -1;
+		}
+
+		if (verbose)
+			EVP_PKEY_print_public_fp(stdout, evpkey, 0, NULL);
+#endif /* OPENSSL_VERSION_NUMBER < 0x30000000L */
+#else
+		fprintf(stderr, "This build of OpenSSL does not support ED25519 or X25519 keys\n");
+		return -1;
+#endif		 /* EVP_PKEY_ED25519 */
 	} else { /* EC key */
 #if !defined(OPENSSL_NO_EC)
 		int i;
-		BIGNUM *x;
-		BIGNUM *y;
-		EC_KEY * eckey = NULL;
+		BIGNUM *x = NULL;
+		BIGNUM *y = NULL;
 		EC_GROUP * ecgroup = NULL;
 		EC_POINT * ecpoint = NULL;
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
+		EC_KEY * eckey = NULL;
+#else
+		EVP_PKEY_CTX *cctx = NULL;
+		OSSL_PARAM_BLD *bld = NULL;
+		OSSL_PARAM *params = NULL;
+		size_t len = 0;
+		unsigned char * buf = NULL;
+		const char *group_name;
+#endif
+
+		if (!keydata.ecpoint) {
+			fprintf(stderr, "gen_key failed %d\n", r);
+			EVP_PKEY_free(evpkey);
+			return -1;
+		}
 
 		ecgroup = EC_GROUP_new_by_curve_name(nid);
 		EC_GROUP_set_asn1_flag(ecgroup, OPENSSL_EC_NAMED_CURVE);
 		ecpoint = EC_POINT_new(ecgroup);
 
 		/* PIV returns 04||x||y  and x and y are the same size */
-		i = (keydata.ecpoint_len - 1)/2;
+		i = (int)(keydata.ecpoint_len - 1) / 2;
 		x = BN_bin2bn(keydata.ecpoint + 1, i, NULL);
 		y = BN_bin2bn(keydata.ecpoint + 1 + i, i, NULL) ;
-		r = EC_POINT_set_affine_coordinates_GFp(ecgroup, ecpoint, x, y, NULL);
-		if (r == 0) {
-			fprintf(stderr, "EC_POINT_set_affine_coordinates_GFp failed\n");
+		if (!x || !y) {
+			sc_log_openssl(ctx);
+			free(keydata.ecpoint);
+			keydata.ecpoint_len = 0;
+			BN_free(x);
+			BN_free(y);
+			EVP_PKEY_free(evpkey);
+			EC_GROUP_free(ecgroup);
+			EC_POINT_free(ecpoint);
 			return -1;
 		}
+		r = EC_POINT_set_affine_coordinates(ecgroup, ecpoint, x, y, NULL);
+
+		free(keydata.ecpoint);
+		keydata.ecpoint_len = 0;
+		BN_free(x);
+		BN_free(y);
+
+		if (r == 0) {
+			sc_log_openssl(ctx);
+			fprintf(stderr, "EC_POINT_set_affine_coordinates_GFp failed\n");
+			EVP_PKEY_free(evpkey);
+			EC_GROUP_free(ecgroup);
+			EC_POINT_free(ecpoint);
+			return -1;
+		}
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
 		eckey = EC_KEY_new();
 		r = EC_KEY_set_group(eckey, ecgroup);
+		EC_GROUP_free(ecgroup);
 		if (r == 0) {
+			sc_log_openssl(ctx);
 			fprintf(stderr, "EC_KEY_set_group failed\n");
+			EVP_PKEY_free(evpkey);
+			EC_POINT_free(ecpoint);
 			return -1;
 		}
 		r = EC_KEY_set_public_key(eckey, ecpoint);
+		EC_POINT_free(ecpoint);
 		if (r == 0) {
+			sc_log_openssl(ctx);
 			fprintf(stderr, "EC_KEY_set_public_key failed\n");
+			EVP_PKEY_free(evpkey);
 			return -1;
 		}
 
 		if (verbose)
 			EC_KEY_print_fp(stdout, eckey, 0);
 
-		EVP_PKEY_assign_EC_KEY(evpkey, eckey);
+		if (EVP_PKEY_assign_EC_KEY(evpkey, eckey) != 1) {
+			sc_log_openssl(ctx);
+			EVP_PKEY_free(evpkey);
+			return -1;
+		}
 #else
+		group_name = OBJ_nid2sn(nid);
+		len = EC_POINT_point2oct(ecgroup, ecpoint, POINT_CONVERSION_COMPRESSED, NULL, 0, NULL);
+		if (!(buf = malloc(len))) {
+			sc_log_openssl(ctx);
+			fprintf(stderr, "EC_KEY_set_public_key out of memory\n");
+			EC_GROUP_free(ecgroup);
+			EC_POINT_free(ecpoint);
+			return -1;
+		}
+		if (EC_POINT_point2oct(ecgroup, ecpoint, POINT_CONVERSION_COMPRESSED, buf, len, NULL) == 0) {
+			sc_log_openssl(ctx);
+			fprintf(stderr, "EC_KEY_set_public_key failed\n");
+			EC_GROUP_free(ecgroup);
+			EC_POINT_free(ecpoint);
+			free(buf);
+			return -1;
+		}
+
+		EC_GROUP_free(ecgroup);
+		EC_POINT_free(ecpoint);
+
+		if (!(bld = OSSL_PARAM_BLD_new()) ||
+				OSSL_PARAM_BLD_push_utf8_string(bld, "group", group_name, strlen(group_name)) != 1 ||
+				OSSL_PARAM_BLD_push_octet_string(bld, "pub", buf, len) != 1 ||
+				!(params = OSSL_PARAM_BLD_to_param(bld))) {
+			sc_log_openssl(ctx);
+			OSSL_PARAM_BLD_free(bld);
+			free(buf);
+			return -1;
+		}
+		free(buf);
+		OSSL_PARAM_BLD_free(bld);
+
+		cctx = EVP_PKEY_CTX_new_from_name(NULL, "EC", NULL);
+		if (!cctx ||
+				EVP_PKEY_fromdata_init(cctx) != 1 ||
+				EVP_PKEY_fromdata(cctx, &evpkey, EVP_PKEY_KEYPAIR, params) != 1) {
+			sc_log_openssl(ctx);
+			fprintf(stderr, "gen_key unable to gen EC key");
+			EVP_PKEY_CTX_free(cctx);
+			OSSL_PARAM_free(params);
+			return -1;
+		}
+		if (verbose)
+			EVP_PKEY_print_public_fp(stdout, evpkey, 0, NULL);
+
+		EVP_PKEY_CTX_free(cctx);
+		OSSL_PARAM_free(params);
+#endif
+#else  /* OPENSSL_NO_EC */
 		fprintf(stderr, "This build of OpenSSL does not support EC keys\n");
 		r = 1;
 #endif /* OPENSSL_NO_EC */
@@ -421,7 +629,8 @@ static int send_apdu(void)
 	sc_apdu_t apdu;
 	u8 buf[SC_MAX_APDU_BUFFER_SIZE+3];
 	u8 rbuf[8192];
-	size_t len0, r;
+	size_t len0, i;
+	int r;
 	int c;
 
 	for (c = 0; c < opt_apdu_count; c++) {
@@ -438,8 +647,8 @@ static int send_apdu(void)
 		apdu.resplen = sizeof(rbuf);
 
 		printf("Sending: ");
-		for (r = 0; r < len0; r++)
-			printf("%02X ", buf[r]);
+		for (i = 0; i < len0; i++)
+			printf("%02X ", buf[i]);
 		printf("\n");
 		r = sc_transmit_apdu(card, &apdu);
 		if (r) {
@@ -551,34 +760,24 @@ int main(int argc, char *argv[])
 			opt_wait = 1;
 			break;
 		default:
-			util_print_usage_and_die(app_name, options, option_help, NULL);
+			util_print_usage(app_name, options, option_help, NULL);
+			if (opt_apdus)
+				free(opt_apdus);
+			return 2;
 		}
 	}
 
-	if (action_count == 0)
-		util_print_usage_and_die(app_name, options, option_help, NULL);
-
-
-//#if OPENSSL_VERSION_NUMBER < 0x10100000L || defined(LIBRESSL_VERSION_NUMBER)
-//	OPENSSL_config(NULL);
-//#endif
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L && !defined(LIBRESSL_VERSION_NUMBER)
-	OPENSSL_init_crypto(OPENSSL_INIT_LOAD_CRYPTO_STRINGS
-		| OPENSSL_INIT_ADD_ALL_CIPHERS
-		| OPENSSL_INIT_ADD_ALL_DIGESTS,
-		NULL);
-#else
-	/* OpenSSL magic */
-	OPENSSL_malloc_init();
-	ERR_load_crypto_strings();
-	OpenSSL_add_all_algorithms();
-
-#endif
+	if (action_count == 0) {
+		util_print_usage(app_name, options, option_help, NULL);
+		if (opt_apdus)
+			free(opt_apdus);
+		return 2;
+	}
 
 	if (out_file) {
 		bp = BIO_new(BIO_s_file());
 		if (!BIO_write_filename(bp, (char *)out_file))
-		    goto end;
+			goto end;
 	} else {
 		bp = BIO_new(BIO_s_file());
 		BIO_set_fp(bp,stdout,BIO_NOCLOSE);
@@ -586,6 +785,9 @@ int main(int argc, char *argv[])
 
 	memset(&ctx_param, 0, sizeof(sc_context_param_t));
 	ctx_param.app_name = app_name;
+	ctx_param.debug    = verbose;
+	if (verbose)
+		ctx_param.debug_file = stderr;
 
 	r = sc_context_create(&ctx, &ctx_param);
 	if (r != SC_SUCCESS) {
@@ -604,7 +806,7 @@ int main(int argc, char *argv[])
 		goto end;
 	}
 
-	err = util_connect_card(ctx, &card, opt_reader, opt_wait, verbose);
+	err = util_connect_card(ctx, &card, opt_reader, opt_wait);
 	if (err)
 		goto end;
 
@@ -659,6 +861,8 @@ end:
 		sc_unlock(card);
 		sc_disconnect_card(card);
 	}
+	if (opt_apdus)
+		free(opt_apdus);
 	sc_release_context(ctx);
 
 	ERR_print_errors_fp(stderr);

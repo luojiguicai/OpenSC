@@ -7,9 +7,9 @@ define([PRODUCT_TARNAME], [opensc])
 define([PRODUCT_BUGREPORT], [https://github.com/OpenSC/OpenSC/issues])
 define([PRODUCT_URL], [https://github.com/OpenSC/OpenSC])
 define([PACKAGE_VERSION_MAJOR], [0])
-define([PACKAGE_VERSION_MINOR], [22])
-define([PACKAGE_VERSION_FIX], [0])
-define([PACKAGE_SUFFIX], [-rc2])
+define([PACKAGE_VERSION_MINOR], [26])
+define([PACKAGE_VERSION_FIX], [1])
+define([PACKAGE_SUFFIX], [])
 
 define([VS_FF_LEGAL_COPYRIGHT], [OpenSC Project])
 define([VS_FF_LEGAL_COMPANY_NAME], [OpenSC Project])
@@ -17,11 +17,11 @@ define([VS_FF_LEGAL_COMPANY_URL], [https://github.com/OpenSC])
 define([VS_FF_COMMENTS], [Provided under the terms of the GNU Lesser General Public License (LGPLv2.1+).])
 define([VS_FF_PRODUCT_NAME], [OpenSC smartcard framework])
 define([VS_FF_PRODUCT_UPDATES], [https://github.com/OpenSC/OpenSC/releases])
-define([VS_FF_PRODUCT_URL], [https://github.com/OpenSC/OpenSC])
 
-m4_sinclude(version.m4.ci)
+m4_sinclude(m4/version.m4.ci)
 
-m4_define([openssl_minimum_version], [1.0.1])
+# Hint: MacOSX/build-package.in contains minimum OpenSSL reference
+m4_define([openssl_minimum_version], [1.1.1])
 
 AC_INIT([PRODUCT_NAME],[PACKAGE_VERSION_MAJOR.PACKAGE_VERSION_MINOR.PACKAGE_VERSION_FIX[]PACKAGE_SUFFIX],[PRODUCT_BUGREPORT],[PRODUCT_TARNAME],[PRODUCT_URL])
 AC_CONFIG_AUX_DIR([.])
@@ -39,16 +39,14 @@ OPENSC_VS_FF_COMPANY_URL="VS_FF_LEGAL_COMPANY_URL"
 OPENSC_VS_FF_COMMENTS="VS_FF_COMMENTS"
 OPENSC_VS_FF_PRODUCT_NAME="VS_FF_PRODUCT_NAME"
 OPENSC_VS_FF_PRODUCT_UPDATES="VS_FF_PRODUCT_UPDATES"
-OPENSC_VS_FF_PRODUCT_URL="VS_FF_PRODUCT_URL"
 
 # LT Version numbers, remember to change them just *before* a release.
 #   (Code changed:                      REVISION++)
 #   (Oldest interface changed/removed:  OLDEST++)
 #   (Interfaces added:                  CURRENT++, REVISION=0)
-OPENSC_LT_CURRENT="8"
-OPENSC_LT_OLDEST="7"
-OPENSC_LT_REVISION="0"
-OPENSC_LT_AGE="0"
+OPENSC_LT_CURRENT="12"
+OPENSC_LT_OLDEST="12"
+OPENSC_LT_REVISION="2"
 OPENSC_LT_AGE="$((${OPENSC_LT_CURRENT}-${OPENSC_LT_OLDEST}))"
 
 AC_CONFIG_SRCDIR([src/libopensc/sc.c])
@@ -84,7 +82,6 @@ fi
 
 dnl Check for some target-specific stuff
 test -z "${WIN32}" && WIN32="no"
-test -z "${CYGWIN}" && CYGWIN="no"
 
 case "${host}" in
 	*-*-solaris*)
@@ -97,17 +94,14 @@ case "${host}" in
 		WIN_LIBPREFIX="lib"
 	;;
 	*-cygwin*)
+		CPPFLAGS="${CPPFLAGS} -DWIN32_LEAN_AND_MEAN"
 		AC_MSG_CHECKING([cygwin mode to use])
-		CYGWIN="yes"
 		if test "${with_cygwin_native}" = "yes"; then
 			AC_MSG_RESULT([Using native win32])
-			CPPFLAGS="${CPPFLAGS} -DWIN32_LEAN_AND_MEAN"
-			CFLAGS="${CFLAGS} -mno-cygwin"
 			WIN32="yes"
 		else
 			AC_MSG_RESULT([Using cygwin])
 			WIN_LIBPREFIX="cyg"
-			AC_DEFINE([USE_CYGWIN], [1], [Define if you are on Cygwin])
 		fi
 	;;
 esac
@@ -131,14 +125,31 @@ case "${host}" in
 	;;
 esac
 
+dnl with Firefox's osclientcerts.so we skip registering our PKCS#11 module on Windows and macOS by default
+case "${host}" in
+	*-*-darwin*)
+		PKCS11_REGISTER_SKIP_FIREFOX="on"
+	;;
+	*-mingw*|*-winnt*|*-cygwin*)
+		PKCS11_REGISTER_SKIP_FIREFOX="on"
+	;;
+	*)
+		PKCS11_REGISTER_SKIP_FIREFOX="off"
+	;;
+esac
+
 AX_CODE_COVERAGE()
 
 AX_CHECK_COMPILE_FLAG([-Wunknown-warning-option], [have_unknown_warning_option="yes"], [have_unknown_warning_option="no"])
 AM_CONDITIONAL([HAVE_UNKNOWN_WARNING_OPTION], [test "${have_unknown_warning_option}" = "yes"])
+AX_CHECK_COMPILE_FLAG([-Wshorten-64-to-32], [have_shorten_warning_option="yes"], [have_shorten_warning_option="no"])
+AM_CONDITIONAL([HAVE_SHORTEN_WARNING_OPTION], [test "${have_shorten_warning_option}" = "yes"])
+
+AX_VALGRIND_CHECK()
 
 AC_ARG_ENABLE(
 	[fuzzing],
-	[AS_HELP_STRING([--enable-fuzzing],[enable compile of fuzzing tests @<:@disabled@:>@, note that CFLAGS and FUZZING_LIBS should be set accordingly, e.g. to something like CFLAGS="-fsanitize=address,fuzzer" FUZZING_LIBS="-fsanitize=fuzzer"])],
+	[AS_HELP_STRING([--enable-fuzzing],[enable compile of fuzzing tests @<:@disabled@:>@, note that CC, CFLAGS and FUZZING_LIBS should be set accordingly, e.g. to something like CC="clang" CFLAGS="-fsanitize=fuzzer-no-link" FUZZING_LIBS="-fsanitize=fuzzer"])],
 	,
 	[enable_fuzzing="no"]
 )
@@ -244,6 +255,13 @@ AC_ARG_ENABLE(
 )
 
 AC_ARG_ENABLE(
+	[piv-sm],
+	[AS_HELP_STRING([--enable-piv-sm],[enable SM in PIV card driver linkage @<:@disabled@:>@])],
+	,
+	[enable_piv_sm="no"]
+)
+
+AC_ARG_ENABLE(
 	[man],
 	[AS_HELP_STRING([--disable-man],[disable installation of manuals @<:@enabled for none Windows@:>@])],
 	,
@@ -255,6 +273,13 @@ AC_ARG_ENABLE(
 	[AS_HELP_STRING([--enable-doc],[enable installation of documents @<:@disabled@:>@])],
 	,
 	[enable_doc="no"]
+)
+
+AC_ARG_ENABLE(
+	[tests],
+	[AS_HELP_STRING([--enable-tests],[enable tests @<:@enabled@:>@])],
+	,
+	[enable_tests="yes"]
 )
 
 AC_ARG_ENABLE(
@@ -275,7 +300,7 @@ AC_ARG_ENABLE(
 	[autostart-items],
 	[AS_HELP_STRING([--enable-autostart-items],[enable autostart items @<:@enabled@:>@])],
 	,
-	[enable_autostart="yes"]
+	[enable_autostart="no"]
 )
 
 AC_ARG_ENABLE(
@@ -418,6 +443,21 @@ AC_CHECK_FUNCS([ \
 	strnlen sigaction
 ])
 
+#
+# Check for __builtin_uadd_overflow
+#
+AC_MSG_CHECKING([compiler support for __builtin_*_overflow()])
+AC_LINK_IFELSE(
+    [AC_LANG_PROGRAM(
+         [[#include <limits.h>]],
+         [[return (__builtin_uadd_overflow(UINT_MAX, UINT_MAX, &(unsigned int){ 0 }));]]
+     )],
+    [AC_MSG_RESULT([yes])
+     AC_DEFINE([HAVE_BUILTIN_OVERFLOW], [1], [define if the compiler supports __builtin_*_overflow().])
+    ],
+    [AC_MSG_RESULT([no])
+    ])
+
 # Do not check for strlcpy and strlcat in Linux because it is not implemented
 # and autotools can not detect it in AC_CHECK_DECLS because build does not fail
 # in this test.
@@ -453,9 +493,20 @@ AC_CHECK_LIB(
 
 if test "${WIN32}" = "no"; then
 	dnl dl support
-	AC_SEARCH_LIBS([dlopen], [dl dld], [], [
-		AC_MSG_ERROR([unable to find the dlopen() function])
-	])
+	AC_ARG_VAR([LDL_LIBS], [linker flags for ldl])
+	if test -z "${LDL_LIBS}"; then
+		AC_CHECK_LIB(
+			[dl],
+			[dlopen],
+			[LDL_LIBS="-ldl"],
+			AC_CHECK_LIB(
+				[dld],
+				[dlopen],
+				[LDL_LIBS="-ldld"],
+				AC_MSG_ERROR([unable to find the dlopen() function])
+			)
+		)
+	fi
 
 	dnl Special check for pthread support.
 	AX_PTHREAD(
@@ -506,7 +557,7 @@ if test "${enable_dnie_ui}" = "yes"; then
 fi
 
 case "${host}" in
-	*-*-darwin*)
+	*-*-darwin*|*-mingw*|*-winnt*|*-cygwin*)
 			have_notify="yes"
 		;;
 	*)
@@ -530,6 +581,8 @@ case "${host}" in
 							   have_notify="no"
 							   have_gio2="no"  ])
 			LIBS="$saved_LIBS"
+			# we do not need glib-2.0
+			GIO2_LIBS=$(echo "$GIO2_LIBS" | sed 's/-lglib-2.0//g')
 		;;
 esac
 
@@ -652,7 +705,7 @@ PKG_CHECK_MODULES(
 	[have_openssl="yes"],
 	[AC_CHECK_LIB(
 		[crypto],
-		[RSA_version],
+		[RSA_get_version],
 		[
 			have_openssl="yes"
 			OPENSSL_LIBS="-lcrypto"
@@ -703,6 +756,9 @@ if test "${enable_cmocka}" = "yes"; then
 	fi
 fi
 
+if test "${enable_fuzzing}" = "yes"; then
+	AC_DEFINE([FUZZING_ENABLED], [1], [Define if fuzzing is enabled])
+fi
 
 
 PKG_CHECK_EXISTS([libeac], [PKG_CHECK_MODULES([OPENPACE], [libeac >= 0.9])],
@@ -721,6 +777,7 @@ AC_MSG_CHECKING([for EAC_CTX_init_pace])
 AC_TRY_LINK_FUNC(EAC_CTX_init_pace, [ AC_MSG_RESULT([yes]) ],
                  [ AC_MSG_WARN([Cannot link against libeac])
                  have_openpace="no" ])
+AC_CHECK_FUNCS([EAC_OBJ_nid2obj])
 
 CPPFLAGS="$saved_CPPFLAGS"
 LIBS="$saved_LIBS"
@@ -797,6 +854,10 @@ if test "${enable_openpace}" = "yes"; then
 else
 	OPENPACE_CFLAGS=""
 	OPENPACE_LIBS=""
+fi
+
+if  test "${enable_piv_sm}" = "yes"; then
+	AC_DEFINE([ENABLE_PIV_SM], [1], [Enable PIV SM])
 fi
 
 if test "${enable_openct}" = "yes"; then
@@ -1015,7 +1076,6 @@ AC_DEFINE_UNQUOTED([OPENSC_VS_FF_COMPANY_NAME], ["${OPENSC_VS_FF_COMPANY_NAME}"]
 AC_DEFINE_UNQUOTED([OPENSC_VS_FF_COMMENTS], ["${OPENSC_VS_FF_COMMENTS}"], [OpenSC version-info Comments])
 AC_DEFINE_UNQUOTED([OPENSC_VS_FF_PRODUCT_NAME], ["${OPENSC_VS_FF_PRODUCT_NAME}"], [OpenSC version-info ProductName])
 AC_DEFINE_UNQUOTED([OPENSC_VS_FF_PRODUCT_UPDATES], ["${OPENSC_VS_FF_PRODUCT_UPDATES}"], [OpenSC version-info UpdateURL])
-AC_DEFINE_UNQUOTED([OPENSC_VS_FF_PRODUCT_URL], ["${OPENSC_VS_FF_PRODUCT_URL}"], [OpenSC version-info ProductURL])
 AC_DEFINE_UNQUOTED([OPENSC_VS_FF_COMPANY_URL], ["${OPENSC_VS_FF_COMPANY_URL}"], [OpenSC version-info UpdateURL])
 
 pkcs11dir="\$(libdir)/pkcs11"
@@ -1032,7 +1092,6 @@ AC_SUBST([OPENSC_VS_FF_COMPANY_NAME])
 AC_SUBST([OPENSC_VS_FF_COMMENTS])
 AC_SUBST([OPENSC_VS_FF_PRODUCT_NAME])
 AC_SUBST([OPENSC_VS_FF_PRODUCT_UPDATES])
-AC_SUBST([OPENSC_VS_FF_PRODUCT_URL])
 AC_SUBST([OPENSC_VS_FF_COMPANY_URL])
 AC_SUBST([OPENSC_LT_CURRENT])
 AC_SUBST([OPENSC_LT_REVISION])
@@ -1042,6 +1101,7 @@ AC_SUBST([WIN_LIBPREFIX])
 AC_SUBST([DEFAULT_PCSC_PROVIDER])
 AC_SUBST([DEFAULT_PKCS11_PROVIDER])
 AC_SUBST([DEFAULT_ONEPIN_PKCS11_PROVIDER])
+AC_SUBST([PKCS11_REGISTER_SKIP_FIREFOX])
 AC_SUBST([OPTIONAL_ZLIB_CFLAGS])
 AC_SUBST([OPTIONAL_ZLIB_LIBS])
 AC_SUBST([OPTIONAL_READLINE_CFLAGS])
@@ -1067,11 +1127,12 @@ AM_CONDITIONAL([ENABLE_ZLIB], [test "${enable_zlib}" = "yes"])
 AM_CONDITIONAL([ENABLE_READLINE], [test "${enable_readline}" = "yes"])
 AM_CONDITIONAL([ENABLE_OPENSSL], [test "${enable_openssl}" = "yes"])
 AM_CONDITIONAL([ENABLE_OPENPACE], [test "${enable_openpace}" = "yes"])
+AM_CONDITIONAL([ENABLE_NOTIFY], [test "${enable_notify}" = "yes"])
 AM_CONDITIONAL([ENABLE_CRYPTOTOKENKIT], [test "${enable_cryptotokenkit}" = "yes"])
 AM_CONDITIONAL([ENABLE_OPENCT], [test "${enable_openct}" = "yes"])
 AM_CONDITIONAL([ENABLE_DOC], [test "${enable_doc}" = "yes"])
+AM_CONDITIONAL([ENABLE_TESTS], [test "${enable_tests}" = "yes"])
 AM_CONDITIONAL([WIN32], [test "${WIN32}" = "yes"])
-AM_CONDITIONAL([CYGWIN], [test "${CYGWIN}" = "yes"])
 AM_CONDITIONAL([ENABLE_MINIDRIVER], [test "${enable_minidriver}" = "yes"])
 AM_CONDITIONAL([ENABLE_MINIDRIVER_SETUP_CUSTOMACTION], [test "${enable_minidriver_ca}" = "yes"])
 AM_CONDITIONAL([ENABLE_SM], [test "${enable_sm}" = "yes"])
@@ -1083,6 +1144,8 @@ AM_CONDITIONAL([GIT_CHECKOUT], [test "${GIT_CHECKOUT}" = "yes"])
 AM_CONDITIONAL([ENABLE_FUZZING], [test "${enable_fuzzing}" = "yes"])
 AM_CONDITIONAL([ENABLE_SHARED], [test "${enable_shared}" = "yes"])
 AS_IF([test "${enable_shared}" = "yes"], [AC_DEFINE([ENABLE_SHARED], [1], [Enable shared libraries])])
+AM_CONDITIONAL([ENABLE_STATIC], [test "${enable_static}" = "yes"])
+AS_IF([test "${enable_static}" = "yes"], [AC_DEFINE([ENABLE_static], [1], [Enable static libraries])])
 
 if test "${enable_pedantic}" = "yes"; then
 	enable_strict="yes";
@@ -1105,8 +1168,6 @@ AC_CONFIG_FILES([
 	src/libopensc/Makefile
 	src/sm/Makefile
 	src/pkcs11/Makefile
-	src/pkcs11/versioninfo-pkcs11.rc
-	src/pkcs11/versioninfo-pkcs11-spy.rc
 	src/pkcs11/opensc-pkcs11.pc
 	src/pkcs15init/Makefile
 	src/scconf/Makefile
@@ -1116,21 +1177,17 @@ AC_CONFIG_FILES([
 	src/tests/fuzzing/Makefile
 	src/tests/unittests/Makefile
 	src/tools/Makefile
-	src/tools/versioninfo-tools.rc
-	src/tools/versioninfo-opensc-notify.rc
 	src/smm/Makefile
 	src/minidriver/Makefile
-	src/minidriver/versioninfo-minidriver.rc
 	src/minidriver/opensc-minidriver.inf
 	win32/Makefile
-	win32/versioninfo.rc
-	win32/versioninfo-customactions.rc
 	win32/winconfig.h
 	win32/OpenSC.iss
 	win32/OpenSC.wxs
 	MacOSX/Makefile
 	MacOSX/build-package
 	MacOSX/Distribution.xml
+	MacOSX/Distribution_universal.xml
 	MacOSX/resources/Welcome.html
 ])
 
@@ -1152,7 +1209,7 @@ Company URL:             ${OPENSC_VS_FF_COMPANY_URL}
 Comments:                ${OPENSC_VS_FF_COMMENTS}
 Product name:            ${OPENSC_VS_FF_PRODUCT_NAME}
 Product updates:         ${OPENSC_VS_FF_PRODUCT_UPDATES}
-Product URL:             ${OPENSC_VS_FF_PRODUCT_URL}
+Product URL:             ${PACKAGE_URL}
 
 User binaries:           $(eval eval eval echo "${bindir}")
 Configuration files:     $(eval eval eval echo "${sysconfdir}")
@@ -1161,6 +1218,7 @@ XSL stylesheets:         ${xslstylesheetsdir}
 
 man support:             ${enable_man}
 doc support:             ${enable_doc}
+tests:                   ${enable_tests}
 thread locking support:  ${enable_thread_locking}
 zlib support:            ${enable_zlib}
 readline support:        ${enable_readline}
@@ -1174,6 +1232,7 @@ minidriver support:      ${enable_minidriver}
 SM support:              ${enable_sm}
 SM default module:       ${DEFAULT_SM_MODULE}
 SM default path:         $(eval eval eval echo "${DEFAULT_SM_MODULE_PATH}")
+PIV SM support:          ${enable_piv_sm}
 DNIe UI support:         ${enable_dnie_ui}
 Notification support:    ${enable_notify}
 Code coverage:           ${enable_code_coverage}
@@ -1189,6 +1248,7 @@ Compiler flags:          ${CFLAGS}
 Linker flags:            ${LDFLAGS}
 Libraries:               ${LIBS}
 
+LDL_LIBS:                ${LDL_LIBS}
 READLINE_CFLAGS:         ${READLINE_CFLAGS}
 READLINE_LIBS:           ${READLINE_LIBS}
 ZLIB_CFLAGS:             ${ZLIB_CFLAGS}

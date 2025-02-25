@@ -16,7 +16,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
 #ifndef _OPENSC_LOG_H
@@ -37,6 +37,7 @@ enum {
 	SC_LOG_DEBUG_SM,		/* secure messaging */
 	SC_LOG_DEBUG_ASN1,		/* asn1.c */
 	SC_LOG_DEBUG_MATCH,		/* card matching */
+	SC_LOG_DEBUG_DEPS,		/* debugging of dependencies, e.g. OpenSSL */
 	SC_LOG_DEBUG_PIN,		/* PIN commands */
 };
 
@@ -59,12 +60,20 @@ enum {
 #define __FUNCTION__ NULL
 #endif
 
+#ifdef __FILE_NAME__
+#define FILENAME __FILE_NAME__
+#else
+#define FILENAME __FILE__
+#endif
+
 #if defined(__GNUC__)
-#define sc_debug(ctx, level, format, args...)	sc_do_log(ctx, level, __FILE__, __LINE__, __FUNCTION__, format , ## args)
-#define sc_log(ctx, format, args...)   sc_do_log(ctx, SC_LOG_DEBUG_NORMAL, __FILE__, __LINE__, __FUNCTION__, format , ## args)
+#define sc_debug(ctx, level, format, args...)	sc_do_log(ctx, level, FILENAME, __LINE__, __FUNCTION__, format , ## args)
+#define sc_log(ctx, format, args...)   sc_do_log(ctx, SC_LOG_DEBUG_NORMAL, FILENAME, __LINE__, __FUNCTION__, format , ## args)
+#define sc_log_openssl(ctx)   sc_do_log_openssl(ctx, SC_LOG_DEBUG_DEPS, FILENAME, __LINE__, __FUNCTION__)
 #else
 #define sc_debug _sc_debug
 #define sc_log _sc_log
+#define sc_log_openssl _sc_log_openssl
 #endif
 
 #if defined(__GNUC__)
@@ -87,6 +96,7 @@ void _sc_debug(struct sc_context *ctx, int level, const char *format, ...)
 	__attribute__ ((format (SC_PRINTF_FORMAT, 3, 4)));
 void _sc_log(struct sc_context *ctx, const char *format, ...)
 	__attribute__ ((format (SC_PRINTF_FORMAT, 2, 3)));
+void _sc_log_openssl(struct sc_context *ctx);
 int sc_color_fprintf(int colors, struct sc_context *ctx, FILE * stream, const char * format, ...)
 	__attribute__ ((format (SC_PRINTF_FORMAT, 4, 5)));
 #else
@@ -97,8 +107,13 @@ void sc_do_log_color(struct sc_context *ctx, int level, const char *file, int li
 void sc_do_log_noframe(sc_context_t *ctx, int level, const char *format, va_list args);
 void _sc_debug(struct sc_context *ctx, int level, const char *format, ...);
 void _sc_log(struct sc_context *ctx, const char *format, ...);
+void _sc_log_openssl(struct sc_context *ctx);
 int sc_color_fprintf(int colors, struct sc_context *ctx, FILE * stream, const char * format, ...);
 #endif
+
+void sc_do_log_openssl(struct sc_context *ctx, int level, const char *file, int line,
+		const char *func);
+
 /** 
  * @brief Log binary data to a sc context
  * 
@@ -109,7 +124,7 @@ int sc_color_fprintf(int colors, struct sc_context *ctx, FILE * stream, const ch
  * @param[in] len   Length of \a data
  */
 #define sc_debug_hex(ctx, level, label, data, len) \
-    _sc_debug_hex(ctx, level, __FILE__, __LINE__, __FUNCTION__, label, data, len)
+    _sc_debug_hex(ctx, level, FILENAME, __LINE__, __FUNCTION__, label, data, len)
 #define sc_log_hex(ctx, label, data, len) \
     sc_debug_hex(ctx, SC_LOG_DEBUG_NORMAL, label, data, len)
 /** 
@@ -131,17 +146,17 @@ void sc_hex_dump(const u8 *buf, size_t len, char *out, size_t outlen);
 const char * sc_dump_hex(const u8 * in, size_t count);
 const char * sc_dump_oid(const struct sc_object_id *oid);
 #define SC_FUNC_CALLED(ctx, level) do { \
-	 sc_do_log(ctx, level, __FILE__, __LINE__, __FUNCTION__, "called\n"); \
+	 sc_do_log(ctx, level, FILENAME, __LINE__, __FUNCTION__, "called\n"); \
 } while (0)
 #define LOG_FUNC_CALLED(ctx) SC_FUNC_CALLED((ctx), SC_LOG_DEBUG_NORMAL)
 
 #define SC_FUNC_RETURN(ctx, level, r) do { \
 	int _ret = r; \
 	if (_ret <= 0) { \
-		sc_do_log_color(ctx, level, __FILE__, __LINE__, __FUNCTION__, _ret ? SC_COLOR_FG_RED : 0, \
+		sc_do_log_color(ctx, level, FILENAME, __LINE__, __FUNCTION__, _ret ? SC_COLOR_FG_RED : 0, \
 			"returning with: %d (%s)\n", _ret, sc_strerror(_ret)); \
 	} else { \
-		sc_do_log(ctx, level, __FILE__, __LINE__, __FUNCTION__, \
+		sc_do_log(ctx, level, FILENAME, __LINE__, __FUNCTION__, \
 			"returning with: %d\n", _ret); \
 	} \
 	return _ret; \
@@ -151,7 +166,7 @@ const char * sc_dump_oid(const struct sc_object_id *oid);
 #define SC_TEST_RET(ctx, level, r, text) do { \
 	int _ret = (r); \
 	if (_ret < 0) { \
-		sc_do_log_color(ctx, level, __FILE__, __LINE__, __FUNCTION__, SC_COLOR_FG_RED, \
+		sc_do_log_color(ctx, level, FILENAME, __LINE__, __FUNCTION__, SC_COLOR_FG_RED, \
 			"%s: %d (%s)\n", (text), _ret, sc_strerror(_ret)); \
 		return _ret; \
 	} \
@@ -161,7 +176,7 @@ const char * sc_dump_oid(const struct sc_object_id *oid);
 #define SC_TEST_GOTO_ERR(ctx, level, r, text) do { \
 	int _ret = (r); \
 	if (_ret < 0) { \
-		sc_do_log_color(ctx, level, __FILE__, __LINE__, __FUNCTION__, SC_COLOR_FG_RED, \
+		sc_do_log_color(ctx, level, FILENAME, __LINE__, __FUNCTION__, SC_COLOR_FG_RED, \
 			"%s: %d (%s)\n", (text), _ret, sc_strerror(_ret)); \
 		goto err; \
 	} \

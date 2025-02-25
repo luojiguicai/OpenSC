@@ -15,7 +15,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
 #ifndef _CARD_OPENPGP_H
@@ -163,8 +163,16 @@ typedef struct pgp_blob {
 typedef struct _pgp_ec_curves {
 	struct sc_object_id oid;
 	size_t size;
+	unsigned int key_type;
 } pgp_ec_curves_t;
 
+#ifdef ENABLE_OPENSSL
+typedef struct _pgp_ec_curves_alt {
+	struct sc_object_id oid;
+	struct sc_object_id oid_alt; /* RFC8410 OIDs to be mapped to oid */
+	size_t size;
+} pgp_ec_curves_alt_t;
+#endif /* ENABLE_OPENSSL */
 
 #define DRVDATA(card)        ((struct pgp_priv_data *) ((card)->drv_data))
 

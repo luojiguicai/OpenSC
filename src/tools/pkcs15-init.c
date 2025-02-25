@@ -26,7 +26,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
 #include "config.h"
@@ -46,12 +46,15 @@
 #include <openssl/err.h>
 #include <openssl/rand.h>
 #include <openssl/rsa.h>
-#include <openssl/dsa.h>
 #include <openssl/bn.h>
 #include <openssl/pkcs12.h>
 #include <openssl/x509v3.h>
 #include <openssl/crypto.h>
 #include <openssl/opensslconf.h> /* for OPENSSL_NO_EC */
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L
+# include <openssl/core_names.h>
+# include <openssl/param_build.h>
+#endif
 #ifndef OPENSSL_NO_EC
 #include <openssl/ec.h>
 #endif /* OPENSSL_NO_EC */
@@ -115,7 +118,6 @@ static int	do_read_public_key(const char *, const char *, EVP_PKEY **);
 static int	do_read_certificate(const char *, const char *, X509 **);
 static char *	cert_common_name(X509 *x509);
 static void	parse_commandline(int argc, char **argv);
-static void	ossl_print_errors(void);
 static int	verify_pin(struct sc_pkcs15_card *, char *);
 
 enum {
@@ -279,7 +281,7 @@ static const char *		option_help[] = {
 	"For a new key specify GUID for a MD container",
 	"Wait for card insertion",
 	"Display this message",
-	"Verbose operation. Use several times to enable debug output.",
+	"Verbose operation, may be used several times",
 
 	NULL,
 	NULL,
@@ -447,23 +449,8 @@ main(int argc, char **argv)
 {
 	struct sc_profile	*profile = NULL;
 	unsigned int		n;
-	int			r = 0;
-
-#if OPENSSL_VERSION_NUMBER < 0x10100000L
-	OPENSSL_config(NULL);
-#endif
-#if OPENSSL_VERSION_NUMBER >= 0x10100000L && !(defined LIBRESSL_VERSION_NUMBER)
-	/* Openssl 1.1.0 magic */
-	OPENSSL_init_crypto(OPENSSL_INIT_LOAD_CRYPTO_STRINGS
-		| OPENSSL_INIT_ADD_ALL_CIPHERS
-		| OPENSSL_INIT_ADD_ALL_DIGESTS
-		| OPENSSL_INIT_LOAD_CONFIG,
-		NULL);
-#else
-	/* OpenSSL magic */
-	OpenSSL_add_all_algorithms();
-	OPENSSL_malloc_init();
-#endif
+	int					r = 0;
+	struct sc_pkcs15_card *tmp_p15_data = NULL;
 
 #ifdef RANDOM_POOL
 	if (!RAND_load_file(RANDOM_POOL, 32))
@@ -632,8 +619,13 @@ main(int argc, char **argv)
 	}
 
 out:
+	/* After erasing card profile->p15_data might change */
 	if (profile) {
+		tmp_p15_data = profile->p15_data;
 		sc_pkcs15init_unbind(profile);
+		if 	(tmp_p15_data != g_p15card) {
+ 			sc_pkcs15_unbind(tmp_p15_data);
+		}
 	}
 	if (g_p15card) {
 		sc_pkcs15_unbind(g_p15card);
@@ -654,6 +646,9 @@ open_reader_and_card(char *reader)
 	memset(&ctx_param, 0, sizeof(ctx_param));
 	ctx_param.ver      = 0;
 	ctx_param.app_name = app_name;
+	ctx_param.debug    = verbose;
+	if (verbose)
+		ctx_param.debug_file = stderr;
 
 	r = sc_context_create(&g_ctx, &ctx_param);
 	if (r) {
@@ -661,7 +656,7 @@ open_reader_and_card(char *reader)
 		return 0;
 	}
 
-	if (util_connect_card_ex(g_ctx, &g_card, reader, opt_wait, 0, verbose))
+	if (util_connect_card_ex(g_ctx, &g_card, reader, opt_wait, 0))
 		return 0;
 
 	return 1;
@@ -725,22 +720,40 @@ static const struct alg_spec alg_types_sym[] = {
 	{ NULL, -1, 0 }
 };
 
+// clang-format off
+/* RSA can have a number , default is 2048 */
+/* EC require a curve name */
+/* EDDSA and XEDDSA  without a size require a size or curve name or OID */
+/* other EDDSA and XEDDSA can be used alone */
 static const struct alg_spec alg_types_asym[] = {
-	{ "rsa",	SC_ALGORITHM_RSA,	1024 },
-	{ "dsa",	SC_ALGORITHM_DSA,	1024 },
+	{ "rsa",	SC_ALGORITHM_RSA,	3072 }, /* new default */
 	{ "gost2001",	SC_ALGORITHM_GOSTR3410,	SC_PKCS15_GOSTR3410_KEYSIZE },
-	{ "ec",		SC_ALGORITHM_EC,	0 },
+	{ "ec",		SC_ALGORITHM_EC,	0 }, /* keybits derived from curve */
+	/*  RFC 8410 */
+	{ "Ed25519",	SC_ALGORITHM_EDDSA,	255 }, /* RFC 8410 and gunpg */
+	{ "Ed448",	SC_ALGORITHM_EDDSA,	448 },
+	{ "X25519",	SC_ALGORITHM_XEDDSA,	255 },
+	{ "X448",	SC_ALGORITHM_XEDDSA,	448 },
+	/* used by Yubikey and GNUK */
+	{ "edwards25519", SC_ALGORITHM_EDDSA,	255 },
+	{ "curve25519", SC_ALGORITHM_XEDDSA,	255 },
+	/* gnupg */
+	{ "cv25519",	SC_ALGORITHM_XEDDSA,	255 },
+
 	{ NULL, -1, 0 }
 };
+// clang-format on
 
 static int
 parse_alg_spec(const struct alg_spec *types, const char *spec, unsigned int *keybits, struct sc_pkcs15_prkey *prkey)
 {
-	int i, algorithm = -1;
+	int i, types_idx = -1, algorithm = -1;
+	unsigned int user_keybits = 0;
 	char *end;
 
 	for (i = 0; types[i].spec; i++) {
 		if (!strncasecmp(spec, types[i].spec, strlen(types[i].spec))) {
+			types_idx = i; /* save index of types array */
 			algorithm = types[i].algorithm;
 			*keybits = types[i].keybits;
 			spec += strlen(types[i].spec);
@@ -755,11 +768,31 @@ parse_alg_spec(const struct alg_spec *types, const char *spec, unsigned int *key
 	if (*spec == '/' || *spec == '-' || *spec == ':')
 		spec++;
 
-	if (*spec)   {
+	/*  prkey is required for keys that use ecparms */
+	if (*spec == '\0' && (algorithm == SC_ALGORITHM_EDDSA || algorithm == SC_ALGORITHM_XEDDSA) && prkey) {
+		if ((prkey->u.ec.params.named_curve = strdup(types[types_idx].spec)) == NULL) /* correct case */
+			return SC_ERROR_OUT_OF_MEMORY;
+		return algorithm;
+	}
+
+	if (*spec != '\0') {
 		if (isalpha((unsigned char)*spec) && algorithm == SC_ALGORITHM_EC && prkey) {
-			prkey->u.ec.params.named_curve = strdup(spec);
-		} else {
-			*keybits = strtoul(spec, &end, 10);
+			if ((prkey->u.ec.params.named_curve = strdup(spec)) == NULL) /* pass EC curve name */
+				return SC_ERROR_OUT_OF_MEMORY;
+		} else if ((algorithm == SC_ALGORITHM_EDDSA || algorithm == SC_ALGORITHM_XEDDSA) && prkey) {
+			if ((prkey->u.ec.params.named_curve = strdup(types[types_idx].spec)) == NULL) /* copy correct case */
+				return SC_ERROR_OUT_OF_MEMORY;
+			user_keybits = (unsigned)strtoul(spec, &end, 10);
+			if (*end) {
+				util_error("Invalid number of key bits \"%s\"", spec);
+				return SC_ERROR_INVALID_ARGUMENTS;
+			}
+			if (user_keybits != *keybits) {
+				util_error("If specified, number of key bits must be \"%d\" for \"%s\"", *keybits, types[types_idx].spec);
+				return SC_ERROR_INVALID_ARGUMENTS;
+			}
+		} else { /* rsa or symmetric key */
+			*keybits = (unsigned)strtoul(spec, &end, 10);
 			if (*end) {
 				util_error("Invalid number of key bits \"%s\"", spec);
 				return SC_ERROR_INVALID_ARGUMENTS;
@@ -995,8 +1028,8 @@ failed:	fprintf(stderr, "Failed to read PIN: %s\n", sc_strerror(r));
 
 static void sc_pkcs15_inc_id(sc_pkcs15_id_t *id)
 {
-	int len;
-	for (len = id->len - 1; len >= 0; len--) {
+	long len;
+	for (len = (long)id->len - 1; len >= 0; len--) {
 		if (id->value[len]++ != 0xFF)
 			break;
 	}
@@ -1035,8 +1068,11 @@ do_store_private_key(struct sc_profile *profile)
 	}
 
 	r = sc_pkcs15_convert_prkey(&args.key, pkey);
-	if (r < 0)
+	if (r < 0) {
+		EVP_PKEY_free(pkey);
+		sc_log_openssl(g_ctx);
 		return r;
+	}
 	init_gost_params(&args.params.gost, pkey);
 
 	if (ncerts) {
@@ -1072,10 +1108,15 @@ do_store_private_key(struct sc_profile *profile)
 	args.access_flags |= SC_PKCS15_PRKEY_ACCESS_SENSITIVE;
 
 	r = sc_lock(g_p15card->card);
-	if (r < 0)
-		return r;
-	r = sc_pkcs15init_store_private_key(g_p15card, profile, &args, NULL);
 	if (r < 0) {
+		EVP_PKEY_free(pkey);
+		sc_pkcs15_erase_prkey(&(args.key));
+		return r;
+	}
+	r = sc_pkcs15init_store_private_key(g_p15card, profile, &args, NULL);
+	sc_pkcs15_erase_prkey(&(args.key));
+	if (r < 0) {
+		EVP_PKEY_free(pkey);
 		sc_unlock(g_p15card->card);
 		return r;
 	}
@@ -1094,8 +1135,11 @@ do_store_private_key(struct sc_profile *profile)
 		memset(&cargs, 0, sizeof(cargs));
 
 		/* Encode the cert */
-		if ((r = do_convert_cert(&cargs.der_encoded, cert[i])) < 0)
+		if ((r = do_convert_cert(&cargs.der_encoded, cert[i])) < 0) {
+			EVP_PKEY_free(pkey);
+			sc_unlock(g_p15card->card);
 			return r;
+		}
 
 		X509_check_purpose(cert[i], -1, -1);
 		cargs.x509_usage = X509_get_key_usage(cert[i]);
@@ -1138,6 +1182,7 @@ next_cert:
 	if (ncerts == 0)
 		r = do_store_public_key(profile, pkey);
 
+	EVP_PKEY_free(pkey);
 	sc_unlock(g_p15card->card);
 	return r;
 }
@@ -1159,6 +1204,7 @@ is_cacert_already_present(struct sc_pkcs15init_certargs *args)
 
 	count = r;
 	for (i = 0; i < count; i++) {
+		int private_obj;
 		cinfo = (sc_pkcs15_cert_info_t *) objs[i]->data;
 
 		if (!cinfo->authority)
@@ -1168,7 +1214,8 @@ is_cacert_already_present(struct sc_pkcs15init_certargs *args)
 		/* XXX we should also match the usage field here */
 
 		/* Compare the DER representation of the certificates */
-		r = sc_pkcs15_read_certificate(g_p15card, cinfo, &cert);
+		private_obj = objs[i]->flags & SC_PKCS15_CO_FLAG_PRIVATE;
+		r = sc_pkcs15_read_certificate(g_p15card, cinfo, private_obj, &cert);
 		if (r < 0 || !cert)
 			continue;
 
@@ -1206,16 +1253,21 @@ do_store_public_key(struct sc_profile *profile, EVP_PKEY *pkey)
 	}
 	if (r >= 0) {
 		r = sc_pkcs15_convert_pubkey(&args.key, pkey);
+		sc_log_openssl(g_ctx);
 		if (r >= 0)
 			init_gost_params(&args.params.gost, pkey);
 	}
 	if (r >= 0) {
 		r = sc_lock(g_p15card->card);
-		if (r < 0)
+		if (r < 0) {
+			sc_pkcs15_erase_pubkey(&(args.key));
 			return r;
+		}
 		r = sc_pkcs15init_store_public_key(g_p15card, profile, &args, &dummy);
+		sc_pkcs15_erase_pubkey(&(args.key));
 		sc_unlock(g_p15card->card);
 	}
+	sc_pkcs15_erase_pubkey(&(args.key));
 
 	return r;
 }
@@ -1244,7 +1296,7 @@ do_store_secret_key(struct sc_profile *profile)
 		return SC_ERROR_INVALID_ARGUMENTS;
 	}
 
-	r = do_read_data_object(opt_infile, &args.key.data, &args.key.data_len, (keybits+7) / 8);
+	r = do_read_data_object(opt_infile, &args.key.data, &args.key.data_len, BYTES4BITS(keybits));
 	if (r < 0) {
 		free(args.key.data);
 		return r;
@@ -1289,6 +1341,7 @@ do_store_certificate(struct sc_profile *profile)
 	r = do_read_certificate(opt_infile, opt_format, &cert);
 	if (r >= 0)
 		r = do_convert_cert(&args.der_encoded, cert);
+	X509_free(cert);
 	if (r >= 0) {
 		r = sc_lock(g_p15card->card);
 		if (r < 0)
@@ -1308,7 +1361,7 @@ do_read_check_certificate(sc_pkcs15_cert_t *sc_oldcert,
 	const char *filename, const char *format, sc_pkcs15_der_t *newcert_raw)
 {
 	X509 *oldcert, *newcert;
-	EVP_PKEY *oldpk, *newpk;
+	EVP_PKEY *oldpk = NULL, *newpk = NULL;
 	int oldpk_type, newpk_type;
 	const u8 *ptr;
 	int r;
@@ -1317,8 +1370,10 @@ do_read_check_certificate(sc_pkcs15_cert_t *sc_oldcert,
 	ptr = sc_oldcert->data.value;
 	oldcert = d2i_X509(NULL, &ptr, sc_oldcert->data.len);
 
-	if (oldcert == NULL)
+	if (oldcert == NULL) {
+		sc_log_openssl(g_ctx);
 		return SC_ERROR_INTERNAL;
+	}
 
 	/* Read the new cert from file and get it's public key */
 	r = do_read_certificate(filename, format, &newcert);
@@ -1329,6 +1384,13 @@ do_read_check_certificate(sc_pkcs15_cert_t *sc_oldcert,
 
 	oldpk = X509_get_pubkey(oldcert);
 	newpk = X509_get_pubkey(newcert);
+	if (!oldpk || !newpk) {
+		EVP_PKEY_free(newpk);
+		EVP_PKEY_free(oldpk);
+		X509_free(oldcert);
+		sc_log_openssl(g_ctx);
+		return SC_ERROR_INTERNAL;
+	}
 
 	oldpk_type = EVP_PKEY_base_id(oldpk);
 	newpk_type = EVP_PKEY_base_id(newpk);
@@ -1336,24 +1398,15 @@ do_read_check_certificate(sc_pkcs15_cert_t *sc_oldcert,
 	/* Compare the public keys, there's no high level openssl function for this(?) */
 	/* Yes there is in 1.0.2 and above EVP_PKEY_cmp */
 
-
 	r = SC_ERROR_INVALID_ARGUMENTS;
 	if (oldpk_type == newpk_type)
 	{
-#if  OPENSSL_VERSION_NUMBER >= 0x10002000L
-		if (EVP_PKEY_cmp(oldpk, newpk) == 1)
-			r = 0;
+#if OPENSSL_VERSION_NUMBER >= 0x30000000L && !defined(LIBRESSL_VERSION_NUMBER)
+		if (EVP_PKEY_eq(oldpk, newpk) == 1)
 #else
-		if ((oldpk_type == EVP_PKEY_DSA) &&
-			!BN_cmp(EVP_PKEY_get0_DSA(oldpk)->p, EVP_PKEY_get0_DSA(newpk)->p) &&
-			!BN_cmp(EVP_PKEY_get0_DSA(oldpk)->q, EVP_PKEY_get0_DSA(newpk)->q) &&
-			!BN_cmp(EVP_PKEY_get0_DSA(oldpk)->g, EVP_PKEY_get0_DSA(newpk)->g))
-				r = 0;
-		else if ((oldpk_type == EVP_PKEY_RSA) &&
-			!BN_cmp(EVP_PKEY_get0_RSA(oldpk)->n, EVP_PKEY_get0_RSA(newpk)->n) &&
-			!BN_cmp(EVP_PKEY_get0_RSA(oldpk)->e, EVP_PKEY_get0_RSA(newpk)->e))
-				r = 0;
+		if (EVP_PKEY_cmp(oldpk, newpk) == 1)
 #endif
+		r = 0;
 	}
 
 	EVP_PKEY_free(newpk);
@@ -1383,6 +1436,7 @@ do_update_certificate(struct sc_profile *profile)
 	sc_pkcs15_cert_t *oldcert = NULL;
 	sc_pkcs15_der_t newcert_raw;
 	int r;
+	int private_obj;
 
 	if (opt_objectid == NULL) {
 		util_error("no ID given for the cert: use --id");
@@ -1401,7 +1455,8 @@ do_update_certificate(struct sc_profile *profile)
 		return r;
 
 	certinfo = (sc_pkcs15_cert_info_t *) obj->data;
-	r = sc_pkcs15_read_certificate(g_p15card, certinfo, &oldcert);
+	private_obj = obj->flags & SC_PKCS15_CO_FLAG_PRIVATE;
+	r = sc_pkcs15_read_certificate(g_p15card, certinfo, private_obj, &oldcert);
 	if (r < 0)
 		goto err;
 
@@ -1498,12 +1553,14 @@ static int get_cert_info(sc_pkcs15_card_t *myp15card, sc_pkcs15_object_t *certob
 	sc_pkcs15_object_t *otherobj;
 	sc_pkcs15_cert_t *othercert = NULL;
 	int r;
+	int private_obj;
 
 	*issuercert = NULL;
 	*has_sibling = 0;
 	*stop = 0;
 
-	r = sc_pkcs15_read_certificate(myp15card, (sc_pkcs15_cert_info_t *) certobj->data, &cert);
+	private_obj = certobj->flags & SC_PKCS15_CO_FLAG_PRIVATE;
+	r = sc_pkcs15_read_certificate(myp15card, (sc_pkcs15_cert_info_t *) certobj->data, private_obj, &cert);
 	if (r < 0)
 		return r;
 
@@ -1519,7 +1576,9 @@ static int get_cert_info(sc_pkcs15_card_t *myp15card, sc_pkcs15_object_t *certob
 			sc_pkcs15_free_certificate(othercert);
 			othercert=NULL;
 		}
-		r = sc_pkcs15_read_certificate(myp15card, (sc_pkcs15_cert_info_t *) otherobj->data, &othercert);
+
+		private_obj = otherobj->flags & SC_PKCS15_CO_FLAG_PRIVATE;
+		r = sc_pkcs15_read_certificate(myp15card, (sc_pkcs15_cert_info_t *) otherobj->data, private_obj, &othercert);
 		if (r < 0 || !othercert)
 			goto done;
 		if ((cert->issuer_len == othercert->subject_len) &&
@@ -1778,6 +1837,7 @@ do_generate_key(struct sc_profile *profile, const char *spec)
 	if (r == 0)
 		r = sc_pkcs15init_generate_key(g_p15card, profile, &keygen_args, keybits, NULL);
 	sc_unlock(g_p15card->card);
+	sc_pkcs15_erase_prkey(&keygen_args.prkey_args.key);
 	return r;
 }
 
@@ -1793,13 +1853,14 @@ do_generate_skey(struct sc_profile *profile, const char *spec)
 
 	if ((r = init_skeyargs(&skey_args)) < 0)
 		return r;
-	skey_args.algorithm = algorithm;
 
 	algorithm = parse_alg_spec(alg_types_sym, spec, &keybits, 0);
 	if (algorithm < 0) {
 		util_error("Invalid symmetric key spec: \"%s\"", spec);
 		return SC_ERROR_INVALID_ARGUMENTS;
 	}
+
+	skey_args.algorithm = algorithm;
 	skey_args.value_len = keybits;
 
 	r = sc_lock(g_p15card->card);
@@ -1869,16 +1930,27 @@ static void
 init_gost_params(struct sc_pkcs15init_keyarg_gost_params *params, EVP_PKEY *pkey)
 {
 #if !defined(OPENSSL_NO_EC)
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
 	EC_KEY *key;
+#else
+	char name[256];
+#endif
+	int nid = NID_undef;
 
 	assert(pkey);
 	if (EVP_PKEY_id(pkey) == NID_id_GostR3410_2001) {
+		assert(params);
+#if OPENSSL_VERSION_NUMBER < 0x30000000L
 		key = EVP_PKEY_get0(pkey);
 		assert(key);
-		assert(params);
 		assert(EC_KEY_get0_group(key));
-		assert(EC_GROUP_get_curve_name(EC_KEY_get0_group(key)) > 0);
-		switch (EC_GROUP_get_curve_name(EC_KEY_get0_group(key))) {
+		nid = EC_GROUP_get_curve_name(EC_KEY_get0_group(key));
+#else
+		assert(EVP_PKEY_get_group_name(pkey, name, sizeof(name), NULL));
+		nid = OBJ_txt2nid(name);
+#endif
+		assert(nid > 0);
+		switch (nid) {
 		case NID_id_GostR3410_2001_CryptoPro_A_ParamSet:
 			params->gostr3410 = SC_PKCS15_PARAMSET_GOSTR3410_A;
 			break;
@@ -1925,7 +1997,7 @@ parse_secret(struct secret *secret, const char *arg)
 		str += 3;
 		if (!isdigit((unsigned char)str[3]))
 			goto parse_err;
-		secret->reference = strtoul(str, &str, 10);
+		secret->reference = (int)strtoul(str, &str, 10);
 		if (*str != '\0')
 			goto parse_err;
 	}
@@ -2170,7 +2242,8 @@ get_key_callback(struct sc_profile *profile,
 
 		prompt = "Please enter key";
 		if (def_key_size && def_key_size < 64) {
-			unsigned int	j, k = 0;
+			unsigned int	j;
+			size_t k = 0;
 
 			sprintf(buffer, "%s [", prompt);
 			k = strlen(buffer);
@@ -2232,7 +2305,7 @@ static int pass_cb(char *buf, int len, int flags, void *d)
 			return 0;
 	}
 
-	plen = strlen(pass);
+	plen = (int)strlen(pass);
 	if (plen <= 0)
 		return 0;
 	if (plen > len)
@@ -2253,7 +2326,7 @@ do_read_pem_private_key(const char *filename, const char *passphrase,
 	*key = PEM_read_bio_PrivateKey(bio, NULL, pass_cb, (char *) passphrase);
 	BIO_free(bio);
 	if (*key == NULL) {
-		ossl_print_errors();
+		sc_log_openssl(g_ctx);
 		return SC_ERROR_CANNOT_LOAD_KEY;
 	}
 	return 0;
@@ -2307,7 +2380,8 @@ do_read_pkcs12_private_key(const char *filename, const char *passphrase,
 	*key = user_key;
 	return ncerts;
 
-error:	ossl_print_errors();
+error:
+	sc_log_openssl(g_ctx);
 	return SC_ERROR_CANNOT_LOAD_KEY;
 }
 
@@ -2373,7 +2447,7 @@ do_read_pem_public_key(const char *filename)
 	pk = PEM_read_bio_PUBKEY(bio, NULL, NULL, NULL);
 	BIO_free(bio);
 	if (pk == NULL)
-		ossl_print_errors();
+		sc_log_openssl(g_ctx);
 	return pk;
 }
 
@@ -2389,7 +2463,7 @@ do_read_der_public_key(const char *filename)
 	pk = d2i_PUBKEY_bio(bio, NULL);
 	BIO_free(bio);
 	if (pk == NULL)
-		ossl_print_errors();
+		sc_log_openssl(g_ctx);
 	return pk;
 }
 
@@ -2426,7 +2500,7 @@ do_read_pem_certificate(const char *filename)
 	xp = PEM_read_bio_X509(bio, NULL, NULL, NULL);
 	BIO_free(bio);
 	if (xp == NULL)
-		ossl_print_errors();
+		sc_log_openssl(g_ctx);
 	return xp;
 }
 
@@ -2442,7 +2516,7 @@ do_read_der_certificate(const char *filename)
 	xp = d2i_X509_bio(bio, NULL);
 	BIO_free(bio);
 	if (xp == NULL)
-		ossl_print_errors();
+		sc_log_openssl(g_ctx);
 	return xp;
 }
 
@@ -2459,8 +2533,10 @@ do_read_certificate(const char *name, const char *format, X509 **out)
 		      format);
 	}
 
-	if (!*out)
+	if (!*out) {
+		sc_log_openssl(g_ctx);
 		util_fatal("Unable to read certificate from %s\n", name);
+	}
 	return 0;
 }
 
@@ -2468,11 +2544,16 @@ static size_t determine_filesize(const char *filename)
 {
 	FILE *fp;
 	long ll;
+	int rc;
 
-	if ((fp = fopen(filename,"rb")) == NULL)
+	fp = fopen(filename,"rb");
+	if (fp == NULL)
 		util_fatal("Unable to open %s: %m", filename);
 
-	fseek(fp,0L,SEEK_END);
+	rc = fseek(fp, 0L, SEEK_END);
+	if (rc != 0)
+		util_fatal("Unable seek in the opened file %s", filename);
+
 	ll = ftell(fp);
 	if (ll == -1l)
 		util_fatal("fseek/ftell error");
@@ -2486,7 +2567,7 @@ do_read_data_object(const char *name, u8 **out, size_t *outlen, size_t expected)
 {
 	FILE *inf;
 	size_t filesize = expected ? expected : determine_filesize(name);
-	int c;
+	ssize_t sz;
 
 	*out = malloc(filesize);
 	if (*out == NULL)
@@ -2498,9 +2579,9 @@ do_read_data_object(const char *name, u8 **out, size_t *outlen, size_t expected)
                 fprintf(stderr, "Unable to open '%s' for reading.\n", name);
                 return SC_ERROR_FILE_NOT_FOUND;
         }
-        c = fread(*out, 1, filesize, inf);
+        sz = fread(*out, 1, filesize, inf);
         fclose(inf);
-        if (c < 0) {
+        if (sz < 0) {
                 perror("read");
                 return SC_ERROR_FILE_NOT_FOUND;
         }
@@ -2519,20 +2600,28 @@ cert_common_name(X509 *x509)
 	int idx, out_len = 0;
 
 	idx = X509_NAME_get_index_by_NID(X509_get_subject_name(x509), NID_commonName, -1);
-	if (idx < 0)
+	if (idx < 0) {
+		sc_log_openssl(g_ctx);
 		return NULL;
+	}
 
 	ne = X509_NAME_get_entry(X509_get_subject_name(x509), idx);
-	if (!ne)
-	       return NULL;
+	if (!ne) {
+		sc_log_openssl(g_ctx);
+		return NULL;
+	}
 
 	a_str = X509_NAME_ENTRY_get_data(ne);
-	if (!a_str)
+	if (!a_str) {
+		sc_log_openssl(g_ctx);
 		return NULL;
+	}
 
 	out_len = ASN1_STRING_to_UTF8(&tmp, a_str);
-	if (!tmp)
+	if (!tmp) {
+		sc_log_openssl(g_ctx);
 		return NULL;
+	}
 
 	out = calloc(1, out_len + 1);
 	if (out)
@@ -2571,7 +2660,8 @@ parse_objects(const char *list, unsigned int action)
 	};
 
 	while (1) {
-		int	len, n;
+		int	n;
+		size_t len;
 
 		while (*list == ',')
 			list++;
@@ -2603,7 +2693,7 @@ parse_objects(const char *list, unsigned int action)
 			}
 		}
 		if (del_flags[n].name == NULL) {
-			fprintf(stderr, "Unknown argument for --delete-objects: %.*s\n", len, list);
+			fprintf(stderr, "Unknown argument for --delete-objects: %.*s\n", (int)len, list);
 			exit(0);
 		}
 		list += len;
@@ -2641,7 +2731,8 @@ parse_x509_usage(const char *list, unsigned int *res)
 	};
 
 	while (1) {
-		int	len, n, match = 0;
+		int	n, match = 0;
+		size_t len;
 
 		while (*list == ',')
 			list++;
@@ -2676,12 +2767,12 @@ parse_x509_usage(const char *list, unsigned int *res)
 		}
 		if (match == 0) {
 			fprintf(stderr,
-				"Unknown X.509 key usage %.*s\n", len, list);
+				"Unknown X.509 key usage %.*s\n", (int)len, list);
 			exit(1);
 		}
 		if (match > 1) {
 			fprintf(stderr,
-				"Ambiguous X.509 key usage %.*s\n", len, list);
+				"Ambiguous X.509 key usage %.*s\n", (int)len, list);
 			exit(1);
 		}
 		list += len;
@@ -2945,24 +3036,6 @@ parse_commandline(int argc, char **argv)
 
 next: ;
 	}
-}
-
-/*
- * OpenSSL helpers
- */
-static void
-ossl_print_errors(void)
-{
-	static int	loaded = 0;
-	long		err;
-
-	if (!loaded) {
-		ERR_load_crypto_strings();
-		loaded = 1;
-	}
-
-	while ((err = ERR_get_error()) != 0)
-		fprintf(stderr, "%s\n", ERR_error_string(err, NULL));
 }
 
 /*

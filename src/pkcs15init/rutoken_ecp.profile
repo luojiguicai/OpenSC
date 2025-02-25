@@ -48,7 +48,7 @@ PIN user-pin {
     auth-id     = 2;
     reference   = 2;
     attempts    = 5;
-    min-length  = 4;
+    min-length  = 6;
     max-length  = 32;
     flags       = case-sensitive, initialized;
 }
@@ -110,6 +110,14 @@ filesystem {
 
             DF Resrv1-DF {
                 file-id = 1001;
+
+                DF Resrv5-DF {
+                    file-id = 8001;
+                }
+
+                DF Resrv6-DF {
+                    file-id = 8002;
+                }
             }
             DF Resrv2-DF {
                 file-id = 1002;

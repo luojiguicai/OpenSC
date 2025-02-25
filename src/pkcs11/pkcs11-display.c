@@ -13,7 +13,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307,
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301
  * USA
  */
 
@@ -141,7 +141,8 @@ print_generic(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_P
 	CK_ULONG i;
 
 	if((CK_LONG)size != -1 && value != NULL) {
-		char hex[16*3+1], ascii[16+1];
+		char hex[16*3+1] = {0};
+		char ascii[16+1];
 		char *hex_ptr = hex, *ascii_ptr = ascii;
 		int offset = 0;
 
@@ -171,7 +172,7 @@ print_generic(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_P
 			ascii_ptr++;
 		}
 
-		/* padd */
+		/* padding */
 		while (strlen(hex) < 3*16)
 			strcat(hex, "   ");
 		fprintf(f, "\n    %08X  %s %s", offset, hex, ascii);
@@ -200,7 +201,7 @@ print_dn(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_PTR ar
 			BIO *bio = BIO_new(BIO_s_file());
 			BIO_set_fp(bio, f, 0);
 			fprintf(f, "    DN: ");
-			X509_NAME_print(bio, name, XN_FLAG_RFC2253);
+			X509_NAME_print_ex(bio, name, 0, XN_FLAG_RFC2253);
 			fprintf(f, "\n");
 			BIO_free(bio);
 		}
@@ -244,6 +245,7 @@ print_print(FILE *f, CK_LONG type, CK_VOID_PTR value, CK_ULONG size, CK_VOID_PTR
 	fprintf(f, "\n");
 }
 
+// clang-format off
 static enum_specs ck_cls_s[] = {
   { CKO_DATA             , "CKO_DATA             " },
   { CKO_CERTIFICATE      , "CKO_CERTIFICATE      " },
@@ -314,9 +316,14 @@ static enum_specs ck_mec_s[] = {
   { CKM_MD2_RSA_PKCS             , "CKM_MD2_RSA_PKCS             " },
   { CKM_MD5_RSA_PKCS             , "CKM_MD5_RSA_PKCS             " },
   { CKM_SHA1_RSA_PKCS            , "CKM_SHA1_RSA_PKCS            " },
+  { CKM_SHA224_RSA_PKCS          , "CKM_SHA224_RSA_PKCS          " },
   { CKM_SHA256_RSA_PKCS          , "CKM_SHA256_RSA_PKCS          " },
   { CKM_SHA384_RSA_PKCS          , "CKM_SHA384_RSA_PKCS          " },
   { CKM_SHA512_RSA_PKCS          , "CKM_SHA512_RSA_PKCS          " },
+  { CKM_SHA3_224_RSA_PKCS        , "CKM_SHA3_224_RSA_PKCS        " },
+  { CKM_SHA3_256_RSA_PKCS        , "CKM_SHA3_256_RSA_PKCS        " },
+  { CKM_SHA3_384_RSA_PKCS        , "CKM_SHA3_383_RSA_PKCS        " },
+  { CKM_SHA3_512_RSA_PKCS        , "CKM_SHA3_512_RSA_PKCS        " },
   { CKM_RIPEMD128_RSA_PKCS       , "CKM_RIPEMD128_RSA_PKCS       " },
   { CKM_RIPEMD160_RSA_PKCS       , "CKM_RIPEMD160_RSA_PKCS       " },
   { CKM_RSA_PKCS_OAEP            , "CKM_RSA_PKCS_OAEP            " },
@@ -325,9 +332,14 @@ static enum_specs ck_mec_s[] = {
   { CKM_SHA1_RSA_X9_31           , "CKM_SHA1_RSA_X9_31           " },
   { CKM_RSA_PKCS_PSS             , "CKM_RSA_PKCS_PSS             " },
   { CKM_SHA1_RSA_PKCS_PSS        , "CKM_SHA1_RSA_PKCS_PSS        " },
+  { CKM_SHA224_RSA_PKCS_PSS      , "CKM_SHA224_RSA_PKCS_PSS      " },
   { CKM_SHA256_RSA_PKCS_PSS      , "CKM_SHA256_RSA_PKCS_PSS      " },
   { CKM_SHA384_RSA_PKCS_PSS      , "CKM_SHA384_RSA_PKCS_PSS      " },
   { CKM_SHA512_RSA_PKCS_PSS      , "CKM_SHA512_RSA_PKCS_PSS      " },
+  { CKM_SHA3_224_RSA_PKCS_PSS    , "CKM_SHA3_224_RSA_PKCS_PSS    " },
+  { CKM_SHA3_256_RSA_PKCS_PSS    , "CKM_SHA3_256_RSA_PKCS_PSS    " },
+  { CKM_SHA3_384_RSA_PKCS_PSS    , "CKM_SHA3_384_RSA_PKCS_PSS    " },
+  { CKM_SHA3_512_RSA_PKCS_PSS    , "CKM_SHA3_512_RSA_PKCS_PSS    " },
   { CKM_DSA_KEY_PAIR_GEN         , "CKM_DSA_KEY_PAIR_GEN         " },
   { CKM_DSA                      , "CKM_DSA                      " },
   { CKM_DSA_SHA1                 , "CKM_DSA_SHA1                 " },
@@ -393,6 +405,9 @@ static enum_specs ck_mec_s[] = {
   { CKM_RIPEMD160                , "CKM_RIPEMD160                " },
   { CKM_RIPEMD160_HMAC           , "CKM_RIPEMD160_HMAC           " },
   { CKM_RIPEMD160_HMAC_GENERAL   , "CKM_RIPEMD160_HMAC_GENERAL   " },
+  { CKM_SHA224                   , "CKM_SHA224                   " },
+  { CKM_SHA224_HMAC              , "CKM_SHA224_HMAC              " },
+  { CKM_SHA224_HMAC_GENERAL      , "CKM_SHA224_HMAC_GENERAL      " },
   { CKM_SHA256                   , "CKM_SHA256                   " },
   { CKM_SHA256_HMAC              , "CKM_SHA256_HMAC              " },
   { CKM_SHA256_HMAC_GENERAL      , "CKM_SHA256_HMAC_GENERAL      " },
@@ -496,11 +511,19 @@ static enum_specs ck_mec_s[] = {
   { CKM_EC_KEY_PAIR_GEN          , "CKM_EC_KEY_PAIR_GEN          " },
   { CKM_ECDSA                    , "CKM_ECDSA                    " },
   { CKM_ECDSA_SHA1               , "CKM_ECDSA_SHA1               " },
+  { CKM_ECDSA_SHA224             , "CKM_ECDSA_SHA224             " },
+  { CKM_ECDSA_SHA256             , "CKM_ECDSA_SHA256             " },
+  { CKM_ECDSA_SHA384             , "CKM_ECDSA_SHA384             " },
+  { CKM_ECDSA_SHA512             , "CKM_ECDSA_SHA512             " },
+  { CKM_ECDSA_SHA3_224           , "CKM_ECDSA_SHA3_224           " },
+  { CKM_ECDSA_SHA3_256           , "CKM_ECDSA_SHA3_256           " },
+  { CKM_ECDSA_SHA3_384           , "CKM_ECDSA_SHA3_384           " },
+  { CKM_ECDSA_SHA3_512           , "CKM_ECDSA_SHA3_512           " },
   { CKM_ECDH1_DERIVE             , "CKM_ECDH1_DERIVE             " },
   { CKM_ECDH1_COFACTOR_DERIVE    , "CKM_ECDH1_COFACTOR_DERIVE    " },
   { CKM_ECMQV_DERIVE             , "CKM_ECMQV_DERIVE             " },
   { CKM_EDDSA                    , "CKM_EDDSA                    " },
-  { CKM_XEDDSA                   , "CKM_XEDDSA                    " },
+  { CKM_XEDDSA                   , "CKM_XEDDSA                   " },
   { CKM_JUNIPER_KEY_GEN          , "CKM_JUNIPER_KEY_GEN          " },
   { CKM_JUNIPER_ECB128           , "CKM_JUNIPER_ECB128           " },
   { CKM_JUNIPER_CBC128           , "CKM_JUNIPER_CBC128           " },
@@ -519,6 +542,11 @@ static enum_specs ck_mec_s[] = {
   { CKM_AES_CCM                  , "CKM_AES_CCM                  " },
   { CKM_AES_CMAC                 , "CKM_AES_CMAC                 " },
   { CKM_AES_CTS                  , "CKM_AES_CTS                  " },
+  { CKM_AES_OFB                  , "CKM_AES_OFB                  " },
+  { CKM_AES_CFB64                , "CKM_AES_CFB64                " },
+  { CKM_AES_CFB8                 , "CKM_AES_CFB8                 " },
+  { CKM_AES_CFB128               , "CKM_AES_CFB128               " },
+  { CKM_AES_CFB1                 , "CKM_AES_CFB1                 " },
   { CKM_BLOWFISH_KEY_GEN         , "CKM_BLOWFISH_KEY_GEN         " },
   { CKM_BLOWFISH_CBC             , "CKM_BLOWFISH_CBC             " },
   { CKM_TWOFISH_KEY_GEN          , "CKM_TWOFISH_KEY_GEN          " },
@@ -549,11 +577,15 @@ static enum_specs ck_mec_s[] = {
 };
 
 static enum_specs ck_mgf_s[] = {
-  { CKG_MGF1_SHA1  , "CKG_MGF1_SHA1  " },
-  { CKG_MGF1_SHA224, "CKG_MGF1_SHA224" },
-  { CKG_MGF1_SHA256, "CKG_MGF1_SHA256" },
-  { CKG_MGF1_SHA384, "CKG_MGF1_SHA384" },
-  { CKG_MGF1_SHA512, "CKG_MGF1_SHA512" },
+  { CKG_MGF1_SHA1    , "CKG_MGF1_SHA1    " },
+  { CKG_MGF1_SHA224  , "CKG_MGF1_SHA224  " },
+  { CKG_MGF1_SHA256  , "CKG_MGF1_SHA256  " },
+  { CKG_MGF1_SHA384  , "CKG_MGF1_SHA384  " },
+  { CKG_MGF1_SHA512  , "CKG_MGF1_SHA512  " },
+  { CKG_MGF1_SHA3_224, "CKG_MGF1_SHA3_224" },
+  { CKG_MGF1_SHA3_256, "CKG_MGF1_SHA3_256" },
+  { CKG_MGF1_SHA3_384, "CKG_MGF1_SHA3_384" },
+  { CKG_MGF1_SHA3_512, "CKG_MGF1_SHA3_512" },
 };
 
 static enum_specs ck_err_s[] = {
@@ -723,6 +755,7 @@ type_spec ck_attribute_specs[] = {
   { CKA_SUBJECT           , "CKA_SUBJECT          ", print_generic, NULL },
 #endif
   { CKA_ID                , "CKA_ID               ", print_generic, NULL },
+  { CKA_UNIQUE_ID         , "CKA_UNIQUE_ID        ", print_generic, NULL },
   { CKA_SENSITIVE         , "CKA_SENSITIVE        ", print_boolean, NULL },
   { CKA_ENCRYPT           , "CKA_ENCRYPT          ", print_boolean, NULL },
   { CKA_DECRYPT           , "CKA_DECRYPT          ", print_boolean, NULL },
@@ -744,6 +777,7 @@ type_spec ck_attribute_specs[] = {
   { CKA_EXPONENT_1        , "CKA_EXPONENT_1       ", print_generic, NULL },
   { CKA_EXPONENT_2        , "CKA_EXPONENT_2       ", print_generic, NULL },
   { CKA_COEFFICIENT       , "CKA_COEFFICIENT      ", print_generic, NULL },
+  { CKA_PUBLIC_KEY_INFO   , "CKA_PUBLIC_KEY_INFO  ", print_generic, NULL },
   { CKA_PRIME             , "CKA_PRIME            ", print_generic, NULL },
   { CKA_SUBPRIME          , "CKA_SUBPRIME         ", print_generic, NULL },
   { CKA_BASE              , "CKA_BASE             ", print_generic, NULL },
@@ -757,6 +791,7 @@ type_spec ck_attribute_specs[] = {
   { CKA_ALWAYS_SENSITIVE  , "CKA_ALWAYS_SENSITIVE ", print_boolean, NULL },
   { CKA_KEY_GEN_MECHANISM , "CKA_KEY_GEN_MECHANISM", print_boolean, NULL },
   { CKA_MODIFIABLE        , "CKA_MODIFIABLE       ", print_boolean, NULL },
+  { CKA_COPYABLE          , "CKA_COPYABLE         ", print_boolean, NULL },
   { CKA_EC_PARAMS         , "CKA_EC_PARAMS        ", print_generic, NULL },
   { CKA_ECDSA_PARAMS      , "CKA_ECDSA_PARAMS     ", print_generic, NULL },
   { CKA_EC_POINT          , "CKA_EC_POINT         ", print_generic, NULL },
@@ -832,6 +867,7 @@ type_spec ck_attribute_specs[] = {
   { CKA_CERT_SHA1_HASH, "CKA_CERT_SHA1_HASH(Netsc)                     ", print_generic, NULL },
   { CKA_CERT_MD5_HASH, "CKA_CERT_MD5_HASH(Netsc)                       ", print_generic, NULL },
 };
+// clang-format on
 
 CK_ULONG ck_attribute_num = sizeof(ck_attribute_specs)/sizeof(type_spec);
 
@@ -863,7 +899,7 @@ lookup_enum(CK_ULONG type, CK_ULONG value)
 void
 show_error( FILE *f, char *str, CK_RV rc )
 {
-	fprintf(f, "%s returned:  %ld %s", str, (unsigned long) rc, lookup_enum ( RV_T, rc ));
+	fprintf(f, "%s returned:  %ld %s", str, (unsigned long) rc, lookup_enum (RV_T, rc ));
 	fprintf(f, "\n");
 }
 
@@ -1035,6 +1071,9 @@ print_attribute_list(FILE *f, CK_ATTRIBUTE_PTR pTemplate, CK_ULONG  ulCount)
 	CK_ULONG j, k;
 	int found;
 
+	if (!pTemplate)
+		return;
+
 	for(j = 0; j < ulCount ; j++) {
 		found = 0;
 		for(k = 0; k < ck_attribute_num; k++) {
@@ -1066,6 +1105,9 @@ print_attribute_list_req(FILE *f, CK_ATTRIBUTE_PTR pTemplate, CK_ULONG  ulCount)
 	CK_ULONG j, k;
 	int found;
 
+	if (!pTemplate)
+		return;
+
 	for(j = 0; j < ulCount ; j++) {
 		found = 0;
 		for(k = 0; k < ck_attribute_num; k++) {
@@ -1095,7 +1137,7 @@ print_session_info(FILE *f, CK_SESSION_INFO *info)
 	};
 
 	fprintf(f, "      slotID:                  %ld\n",       info->slotID );
-	fprintf(f, "      state:                  '%32.32s'\n",  lookup_enum(STA_T, info->state));
+	fprintf(f, "      state:                   %0lx (%32.32s)\n", info->state, lookup_enum(STA_T, info->state));
 	fprintf(f, "      flags:                   %0lx\n",     info->flags );
 
 	for(i = 0; i < sizeof (ck_flags) / sizeof (*ck_flags); i++) {
@@ -1113,9 +1155,12 @@ print_interfaces_list(FILE *f, CK_INTERFACE_PTR pInterfacesList, CK_ULONG ulCoun
 
 	if (pInterfacesList) {
 		for (i = 0; i < ulCount; i++) {
-			fprintf(f, "Interface '%s' flags=%lx\n",
-				pInterfacesList[i].pInterfaceName,
-				pInterfacesList[i].flags);
+			CK_INTERFACE_PTR in = &pInterfacesList[i];
+			fprintf(f, "Interface '%s' version=%d.%d flags=%lx\n",
+					in->pInterfaceName,
+					((CK_VERSION *)(in->pFunctionList))->major,
+					((CK_VERSION *)(in->pFunctionList))->minor,
+					in->flags);
 		}
 	}
 	else {

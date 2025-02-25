@@ -15,7 +15,7 @@
  *
  * You should have received a copy of the GNU Lesser General Public
  * License along with this library; if not, write to the Free Software
- * Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA  02111-1307  USA
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
 /*
@@ -35,7 +35,7 @@
  * https://gnupg.org/ftp/specs/OpenPGP-smart-card-application-3.4.pdf
  */
 
-#if HAVE_CONFIG_H
+#ifdef HAVE_CONFIG_H
 #include "config.h"
 #endif
 
@@ -86,34 +86,49 @@ static struct sc_card_driver pgp_drv = {
 	NULL, 0, NULL
 };
 
-
-static pgp_ec_curves_t  ec_curves_openpgp34[] = {
+// clang-format off
+static pgp_ec_curves_t ec_curves_openpgp34[] = {
 	/* OpenPGP 3.4+ Ed25519 and Curve25519 */
-	{{{1, 3, 6, 1, 4, 1, 3029, 1, 5, 1, -1}}, 256}, /* curve25519 for encryption => CKK_EC_MONTGOMERY */
-	{{{1, 3, 6, 1, 4, 1, 11591, 15, 1, -1}}, 256}, /* ed25519 for signatures => CKK_EC_EDWARDS */
+		{{{1, 3, 6, 1, 4, 1, 3029, 1, 5, 1, -1}}, 255, SC_ALGORITHM_XEDDSA}, /* curve25519 for encryption => CKK_EC_MONTGOMERY */
+		{{{1, 3, 101, 110, -1}},		  255, SC_ALGORITHM_XEDDSA}, /* RFC8410 OID equivalent to curve25519 */
+		{{{1, 3, 6, 1, 4, 1, 11591, 15, 1, -1}},  255, SC_ALGORITHM_EDDSA}, /* ed25519 for signatures => CKK_EC_EDWARDS */
+		{{{1, 3, 101, 112, -1}},		  255, SC_ALGORITHM_EDDSA}, /* RFC8410 OID equivalent to ed25519 */
+
 	/* v3.0+ supports: [RFC 4880 & 6637] 0x12 = ECDH, 0x13 = ECDSA */
-	{{{1, 2, 840, 10045, 3, 1, 7, -1}}, 256}, /* ansiX9p256r1 */
-	{{{1, 3, 132, 0, 34, -1}}, 384}, /* ansiX9p384r1 */
-	{{{1, 3, 132, 0, 35, -1}}, 521}, /* ansiX9p521r1 */
-	{{{1, 3, 36, 3, 3, 2, 8, 1, 1, 7, -1}}, 256}, /* brainpoolP256r1 */
-	{{{1, 3, 36, 3, 3, 2, 8, 1, 1, 11, -1}}, 384}, /* brainpoolP384r1 */
-	{{{1, 3, 36, 3, 3, 2, 8, 1, 1, 13, -1}}, 512}, /* brainpoolP512r1 */
-	{{{-1}}, 0} /* This entry must not be touched. */
+		{{{1, 2, 840, 10045, 3, 1, 7, -1}},	  256, SC_ALGORITHM_EC}, /* ansiX9p256r1 */
+		{{{1, 3, 132, 0, 34, -1}},		  384, SC_ALGORITHM_EC}, /* ansiX9p384r1 */
+		{{{1, 3, 132, 0, 35, -1}},		  521, SC_ALGORITHM_EC}, /* ansiX9p521r1 */
+		{{{1, 3, 36, 3, 3, 2, 8, 1, 1, 7, -1}},   256, SC_ALGORITHM_EC}, /* brainpoolP256r1 */
+		{{{1, 3, 36, 3, 3, 2, 8, 1, 1, 11, -1}},  384, SC_ALGORITHM_EC}, /* brainpoolP384r1 */
+		{{{1, 3, 36, 3, 3, 2, 8, 1, 1, 13, -1}},  512, SC_ALGORITHM_EC}, /* brainpoolP512r1 */
+		{{{-1}},				  0, 0  }	/* This entry must not be touched. */
 };
 
-static pgp_ec_curves_t *ec_curves_openpgp = ec_curves_openpgp34 + 2;
+#ifdef ENABLE_OPENSSL
+static pgp_ec_curves_alt_t ec_curves_alt[] = {
+		{{{1, 3, 6, 1, 4, 1, 3029, 1, 5, 1, -1}}, {{1, 3, 101, 110, -1}}, 255}, /* curve25519 CKK_EC_MONTGOMERY X25519 */
+		{{{1, 3, 6, 1, 4, 1, 11591, 15, 1, -1}},  {{1, 3, 101, 112, -1}}, 255}, /* ed25519 CKK_EC_EDWARDS Ed25519 */
+		{{{-1}},				  {{-1}},		  0  }	/* This entry must not be touched. */
+};
+
+#endif /* ENABLE_OPENSSL */
+
+static pgp_ec_curves_t *ec_curves_openpgp = ec_curves_openpgp34 + 4;
 
 struct sc_object_id curve25519_oid = {{1, 3, 6, 1, 4, 1, 3029, 1, 5, 1, -1}};
+struct sc_object_id X25519_oid = {{1, 3, 101, 110, -1}}; /* need to check for RFC8410 version? */
 
 /* Gnuk supports NIST, SECG and Curve25519 since version 1.2 */
-static pgp_ec_curves_t	ec_curves_gnuk[] = {
-	{{{1, 2, 840, 10045, 3, 1, 7, -1}}, 256}, /* ansiX9p256r1 */
-	{{{1, 3, 132, 0, 10, -1}}, 256}, /* secp256k1 */
-	{{{1, 3, 6, 1, 4, 1, 3029, 1, 5, 1, -1}}, 256}, /* curve25519 for encryption => CKK_EC_MONTGOMERY */
-	{{{1, 3, 6, 1, 4, 1, 11591, 15, 1, -1}}, 256}, /* ed25519 for signatures => CKK_EC_EDWARDS */
-	{{{-1}}, 0} /* This entry must not be touched. */
+static pgp_ec_curves_t ec_curves_gnuk[] = {
+		{{{1, 2, 840, 10045, 3, 1, 7, -1}},	  256, SC_ALGORITHM_EC},     /* ansiX9p256r1 */
+		{{{1, 3, 132, 0, 10, -1}},		  256, SC_ALGORITHM_EC},     /* secp256k1 */
+		{{{1, 3, 6, 1, 4, 1, 3029, 1, 5, 1, -1}}, 255, SC_ALGORITHM_XEDDSA}, /* curve25519 for encryption => CKK_EC_MONTGOMERY */
+		{{{1, 3, 101, 110, -1}},                  255, SC_ALGORITHM_XEDDSA}, /* RFC8410 OID equivalent to curve25519 */
+		{{{1, 3, 6, 1, 4, 1, 11591, 15, 1, -1}},  255, SC_ALGORITHM_EDDSA},  /* ed25519 for signatures => CKK_EC_EDWARDS */
+		{{{1, 3, 101, 112, -1}},		  255, SC_ALGORITHM_EDDSA},  /* RFC8410 OID equivalent to ed25519 */
+		{{{-1}},				  0,   0}		     /* This entry must not be touched. */
 };
-
+// clang-format on
 
 /*
  * The OpenPGP card doesn't have a file system, instead everything
@@ -129,7 +144,7 @@ static pgp_ec_curves_t	ec_curves_gnuk[] = {
 
 static int		pgp_get_card_features(sc_card_t *card);
 static int		pgp_finish(sc_card_t *card);
-static void		pgp_iterate_blobs(pgp_blob_t *, int, void (*func)());
+static void		pgp_free_blobs(pgp_blob_t *);
 
 static int		pgp_get_blob(sc_card_t *card, pgp_blob_t *blob,
 				 unsigned int id, pgp_blob_t **ret);
@@ -137,8 +152,9 @@ static pgp_blob_t	*pgp_new_blob(sc_card_t *, pgp_blob_t *, unsigned int, sc_file
 static void		pgp_free_blob(pgp_blob_t *);
 static int		pgp_get_pubkey(sc_card_t *, unsigned int, u8 *, size_t);
 static int		pgp_get_pubkey_pem(sc_card_t *, unsigned int, u8 *, size_t);
+static int		pgp_enumerate_blob(sc_card_t *card, pgp_blob_t *blob);
 
-
+// clang-format off
 static pgp_do_info_t	pgp1x_objects[] = {	/* OpenPGP card spec 1.1 */
 	{ 0x004f, SIMPLE,      READ_ALWAYS | WRITE_NEVER, NULL,               NULL        },
 	{ 0x005b, SIMPLE,      READ_ALWAYS | WRITE_PIN3,  NULL,               sc_put_data },
@@ -196,7 +212,7 @@ static pgp_do_info_t	pgp34_objects[] = {	/**** OpenPGP card spec 3.4 ****/
 	{ 0x00de, SIMPLE,      READ_ALWAYS | WRITE_PIN3,  NULL,               sc_put_data },
 	{ 0x00de, SIMPLE,      READ_ALWAYS | WRITE_NEVER, NULL,               NULL        },
 	/* DO FA is CONSTRUCTED in spec; we treat it as SIMPLE for the time being */
-	{ 0x00fa, SIMPLE,      READ_ALWAYS | WRITE_NEVER, NULL,               NULL        },
+	{ 0x00fa, CONSTRUCTED, READ_ALWAYS | WRITE_NEVER, sc_get_data,        NULL        },
 	/* DO FB is CONSTRUCTED in spec; we treat it as SIMPLE for the time being */
 	{ 0x00fb, SIMPLE,      READ_ALWAYS | WRITE_PIN3,  NULL,               sc_put_data },
 	/* DO FC is CONSTRUCTED in spec; we treat it as SIMPLE for the time being */
@@ -257,7 +273,7 @@ static pgp_do_info_t	pgp34_objects[] = {	/**** OpenPGP card spec 3.4 ****/
 	{ 0x5f50, SIMPLE,      READ_ALWAYS | WRITE_PIN3,  sc_get_data,        sc_put_data },
 	{ 0x5f52, SIMPLE,      READ_ALWAYS | WRITE_NEVER, sc_get_data,        NULL        },
 	/* DO 7F21 is CONSTRUCTED in spec; we treat it as SIMPLE: no need to parse TLV */
-	{ DO_CERT, SIMPLE,      READ_ALWAYS | WRITE_PIN3,  sc_get_data,        sc_put_data },
+	{ DO_CERT, SIMPLE,      READ_ALWAYS | WRITE_PIN3,  sc_get_data,       sc_put_data },
 	{ 0x7f48, CONSTRUCTED, READ_NEVER  | WRITE_NEVER, NULL,               NULL        },
 	{ 0x7f49, CONSTRUCTED, READ_ALWAYS | WRITE_NEVER, NULL,               NULL        },
 	{ DO_AUTH,     CONSTRUCTED, READ_ALWAYS | WRITE_NEVER, pgp_get_pubkey,     NULL   },
@@ -271,6 +287,7 @@ static pgp_do_info_t	pgp34_objects[] = {	/**** OpenPGP card spec 3.4 ****/
 	{ DO_ENCR_SYM, SIMPLE,      READ_ALWAYS | WRITE_PIN3,  pgp_get_pubkey_pem, NULL   },
 	{ 0, 0, 0, NULL, NULL },
 };
+// clang-format on
 
 static pgp_do_info_t	*pgp33_objects = pgp34_objects +  9;
 static pgp_do_info_t 	*pgp30_objects = pgp34_objects + 10;
@@ -355,6 +372,27 @@ pgp_match_card(sc_card_t *card)
 }
 
 
+/* populate MF - add matching blobs listed in the pgp_objects table */
+int populate_blobs_to_mf(sc_card_t *card, struct pgp_priv_data *priv)
+{
+	pgp_do_info_t	*info;
+	for (info = priv->pgp_objects; (info != NULL) && (info->id > 0); info++) {
+		if (((info->access & READ_MASK) != READ_NEVER) && (info->get_fn != NULL)) {
+			pgp_blob_t *child = NULL;
+			sc_file_t *file = sc_file_new();
+
+			child = pgp_new_blob(card, priv->mf, info->id, file);
+
+			/* catch out of memory condition */
+			if (child == NULL) {
+				sc_file_free(file);
+				LOG_FUNC_RETURN(card->ctx, SC_ERROR_OUT_OF_MEMORY);
+			}
+		}
+	}
+	LOG_FUNC_RETURN(card->ctx, SC_SUCCESS);
+}
+
 /**
  * ABI: initialize driver & allocate private data.
  */
@@ -364,7 +402,6 @@ pgp_init(sc_card_t *card)
 	struct pgp_priv_data *priv;
 	sc_path_t	path;
 	sc_file_t	*file = NULL;
-	pgp_do_info_t	*info;
 	int		r, i;
 
 	LOG_FUNC_CALLED(card->ctx);
@@ -466,7 +503,7 @@ pgp_init(sc_card_t *card)
 		priv->ec_curves = ec_curves_openpgp;
 	}
 
-	/* change file path to MF for re-use in MF */
+	/* change file path to MF for reuse in MF */
 	sc_format_path("3f00", &file->path);
 
 	/* set up the root of our fake file tree */
@@ -481,29 +518,22 @@ pgp_init(sc_card_t *card)
 	/* select MF */
 	priv->current = priv->mf;
 
-	/* populate MF - add matching blobs listed in the pgp_objects table */
-	for (info = priv->pgp_objects; (info != NULL) && (info->id > 0); info++) {
-		if (((info->access & READ_MASK) != READ_NEVER) && (info->get_fn != NULL)) {
-			pgp_blob_t *child = NULL;
-
-			child = pgp_new_blob(card, priv->mf, info->id, sc_file_new());
-
-			/* catch out of memory condition */
-			if (child == NULL) {
-				pgp_finish(card);
-				LOG_FUNC_RETURN(card->ctx, SC_ERROR_OUT_OF_MEMORY);
-			}
-		}
+	r = populate_blobs_to_mf(card, priv);
+	if (r < 0) {
+		pgp_finish(card);
+		LOG_FUNC_RETURN(card->ctx, r);
 	}
 
 	/* get card_features from ATR & DOs */
-	pgp_get_card_features(card);
+	if (pgp_get_card_features(card)) {
+		LOG_FUNC_RETURN(card->ctx, SC_SUCCESS);
+	}
 
 	/* if algorithm attributes can be changed,
 	 * add supported algorithms based on specification for pkcs15-init */
-	if ((priv->ext_caps & EXT_CAP_ALG_ATTR_CHANGEABLE) &&
-	    (strcmp(card->ctx->app_name, "pkcs15-init") == 0)) {
+	if (priv->ext_caps & EXT_CAP_ALG_ATTR_CHANGEABLE) {
 		unsigned long flags_rsa, flags_ecc, ext_flags;
+		unsigned long flags_eddsa, flags_xeddsa;
 
 		/* OpenPGP card spec 1.1 & 2.x, section 7.2.9 & 7.2.10 / v3.x section 7.2.11 & 7.2.12 */
 		flags_rsa = SC_ALGORITHM_RSA_PAD_PKCS1|
@@ -515,6 +545,12 @@ pgp_init(sc_card_t *card)
 			    SC_ALGORITHM_ONBOARD_KEY_GEN;
 		ext_flags = SC_ALGORITHM_EXT_EC_NAMEDCURVE;
 
+		flags_eddsa = SC_ALGORITHM_EDDSA_RAW |
+			      SC_ALGORITHM_ONBOARD_KEY_GEN;
+		/* xeddsa may allow signing at some time */
+		flags_xeddsa = SC_ALGORITHM_ECDH_CDH_RAW |
+			       SC_ALGORITHM_ONBOARD_KEY_GEN;
+
 		switch (card->type) {
 			case SC_CARD_TYPE_OPENPGP_V3:
 				/* RSA 1024 was removed for v3+ */
@@ -525,8 +561,17 @@ pgp_init(sc_card_t *card)
 				_sc_card_add_rsa_alg(card, 2048, flags_rsa, 0);
 				for (i=0; priv->ec_curves[i].oid.value[0] >= 0; i++)
 				{
-					_sc_card_add_ec_alg(card, priv->ec_curves[i].size,
-						flags_ecc, ext_flags, &priv->ec_curves[i].oid);
+					if (priv->ec_curves[i].key_type == SC_ALGORITHM_EC)
+						_sc_card_add_ec_alg(card, priv->ec_curves[i].size,
+								flags_ecc, ext_flags, &priv->ec_curves[i].oid);
+					else if (priv->ec_curves[i].key_type == SC_ALGORITHM_EDDSA)
+						_sc_card_add_eddsa_alg(card, priv->ec_curves[i].size,
+								flags_eddsa, ext_flags, &priv->ec_curves[i].oid);
+					else if (priv->ec_curves[i].key_type == SC_ALGORITHM_XEDDSA)
+						_sc_card_add_xeddsa_alg(card, priv->ec_curves[i].size,
+								flags_xeddsa, ext_flags, &priv->ec_curves[i].oid);
+					else
+						LOG_FUNC_RETURN(card->ctx, SC_ERROR_INTERNAL);
 				}
 				break;
 			case SC_CARD_TYPE_OPENPGP_V2:
@@ -577,7 +622,7 @@ pgp_parse_hist_bytes(sc_card_t *card, u8 *ctlv, size_t ctlv_len)
  **/
 static int
 pgp_parse_algo_attr_blob(sc_card_t *card, const pgp_blob_t *blob,
-	sc_cardctl_openpgp_keygen_info_t *key_info)
+		sc_cardctl_openpgp_key_gen_store_info_t *key_info)
 {
 	struct pgp_priv_data *priv = DRVDATA(card);
 	struct sc_object_id oid;
@@ -617,7 +662,7 @@ pgp_parse_algo_attr_blob(sc_card_t *card, const pgp_blob_t *blob,
 			if (blob->data[blob->len-1] == SC_OPENPGP_KEYFORMAT_EC_STDPUB){
 				if (blob->len < 3)
 					return SC_ERROR_INCORRECT_PARAMETERS;
-				key_info->u.ec.oid_len = blob->len - 2;
+				key_info->u.ec.oidv_len = blob->len - 2;
 				key_info->u.ec.keyformat = SC_OPENPGP_KEYFORMAT_EC_STDPUB;
 			}
 			else {
@@ -626,15 +671,15 @@ pgp_parse_algo_attr_blob(sc_card_t *card, const pgp_blob_t *blob,
 				if (blob->len < 2)
 					return SC_ERROR_INCORRECT_PARAMETERS;
 				if (blob->data[blob->len-1] == SC_OPENPGP_KEYFORMAT_EC_STD)
-					key_info->u.ec.oid_len = blob->len - 2;
+					key_info->u.ec.oidv_len = blob->len - 2;
 				else
-					key_info->u.ec.oid_len = blob->len - 1;
+					key_info->u.ec.oidv_len = blob->len - 1;
 				key_info->u.ec.keyformat = SC_OPENPGP_KEYFORMAT_EC_STD;
 			}
 
 			/* Create copy of oid from blob */
 			sc_init_oid(&oid);
-			r = sc_asn1_decode_object_id(&blob->data[1], key_info->u.ec.oid_len, &oid);
+			r = sc_asn1_decode_object_id(&blob->data[1], key_info->u.ec.oidv_len, &oid);
 
 			/* decoding failed, return sc_asn1_decode_object_id error code */
 			if (r > 0){
@@ -662,6 +707,91 @@ pgp_parse_algo_attr_blob(sc_card_t *card, const pgp_blob_t *blob,
 	LOG_FUNC_RETURN(card->ctx, SC_SUCCESS);
 }
 
+int
+_pgp_handle_curve25519(sc_card_t *card,
+		sc_cardctl_openpgp_key_gen_store_info_t *key_info, unsigned int do_num)
+{
+	if (!card || !key_info)
+		return 0;
+	if (!sc_compare_oid(&key_info->u.ec.oid, &curve25519_oid) &&
+			!sc_compare_oid(&key_info->u.ec.oid, &X25519_oid))
+		return 0;
+
+	/* CKM_XEDDSA supports both Sign and Derive, but
+	* OpenPGP card supports only derivation using these
+	* keys as far as I know */
+	_sc_card_add_xeddsa_alg(card, key_info->u.ec.key_length,
+			SC_ALGORITHM_ECDH_CDH_RAW | SC_ALGORITHM_ONBOARD_KEY_GEN, 0, &key_info->u.ec.oid);
+	sc_log(card->ctx, "DO %uX: Added XEDDSA algorithm (%d), mod_len = %zu",
+	    do_num, SC_ALGORITHM_XEDDSA, key_info->u.ec.key_length);
+	return 1;
+}
+
+int
+_pgp_add_algo(sc_card_t *card, sc_cardctl_openpgp_key_gen_store_info_t *key_info, unsigned int do_num)
+{
+	unsigned long flags = 0, ext_flags = 0;
+
+	if (!card || !key_info)
+		return 0;
+
+	/* [RFC 4880], [draft-ietf-openpgp-crypto-refresh] */
+	switch (key_info->algorithm) {
+	case SC_OPENPGP_KEYALGO_RSA:
+		/* OpenPGP card spec 1.1 & 2.x, section 7.2.9 & 7.2.10 /
+		 * v3.x section 7.2.11 & 7.2.12 */
+		flags = SC_ALGORITHM_RSA_PAD_PKCS1 |
+			SC_ALGORITHM_RSA_HASH_NONE |
+			SC_ALGORITHM_ONBOARD_KEY_GEN;	/* key gen on card */
+
+		_sc_card_add_rsa_alg(card, key_info->u.rsa.modulus_len, flags, 0);
+		sc_log(card->ctx, "DO %uX: Added RSA algorithm, mod_len = %"
+			SC_FORMAT_LEN_SIZE_T"u",
+			do_num, key_info->u.rsa.modulus_len);
+		break;
+	case SC_OPENPGP_KEYALGO_ECDH:
+		/* The montgomery curve (curve25519) needs to go through
+		 * different paths, otherwise we handle it as a normal EC key */
+		if (_pgp_handle_curve25519(card, key_info, do_num))
+			break;
+		/* fall through */
+	case SC_OPENPGP_KEYALGO_ECDSA:
+		/* v3.0+: ECC [RFC 4880 & 6637] */
+
+		/* Allow curve to be used by both ECDH and ECDSA.
+		 * pgp_init set these flags the same way */
+		flags = SC_ALGORITHM_ECDH_CDH_RAW;
+		flags |= SC_ALGORITHM_ECDSA_RAW;
+		flags |= SC_ALGORITHM_ECDSA_HASH_NONE;
+		flags |= SC_ALGORITHM_ONBOARD_KEY_GEN;
+		ext_flags = SC_ALGORITHM_EXT_EC_NAMEDCURVE;
+
+		_sc_card_add_ec_alg(card, key_info->u.ec.key_length, flags, ext_flags,
+			&key_info->u.ec.oid);
+		sc_log(card->ctx, "DO %uX: Added EC algorithm (%d), mod_len = %zu" ,
+			do_num, key_info->algorithm, key_info->u.ec.key_length);
+		break;
+	case SC_OPENPGP_KEYALGO_EDDSA:
+		/* EdDSA from draft-ietf-openpgp-rfc4880bis-08 */
+		/* Handle Yubikey bug, that in DO FA curve25519 has EDDSA algo */
+		if (_pgp_handle_curve25519(card, key_info, do_num))
+			break;
+		_sc_card_add_eddsa_alg(card, key_info->u.ec.key_length,
+				SC_ALGORITHM_EDDSA_RAW | SC_ALGORITHM_ONBOARD_KEY_GEN, 0, &key_info->u.ec.oid);
+
+		sc_log(card->ctx, "DO %uX: Added EDDSA algorithm (%d), mod_len = %zu" ,
+			do_num, key_info->algorithm, key_info->u.ec.key_length);
+		break;
+	default:
+		sc_log(card->ctx, "DO %uX: Unknown algorithm ID (%d)" ,
+			do_num, key_info->algorithm);
+		/* return "false" if we do not understand algo */
+		return 0;
+	}
+	/* return true */
+	return 1;
+}
+
 
 /**
  * Internal: get features of the card: capabilities, ...
@@ -672,8 +802,9 @@ pgp_get_card_features(sc_card_t *card)
 	struct pgp_priv_data *priv = DRVDATA(card);
 	u8 *hist_bytes = card->reader->atr_info.hist_bytes;
 	size_t hist_bytes_len = card->reader->atr_info.hist_bytes_len;
-	size_t i;
-	pgp_blob_t *blob, *blob6e, *blob73;
+	unsigned int i;
+	pgp_blob_t *blob, *blob6e, *blob73, *blobfa;
+	int handled_algos = 0;
 
 	LOG_FUNC_CALLED(card->ctx);
 
@@ -723,6 +854,24 @@ pgp_get_card_features(sc_card_t *card)
 
 	if (priv->bcd_version >= OPENPGP_CARD_3_1) {
 		card->caps |= SC_CARD_CAP_ISO7816_PIN_INFO;
+	}
+
+	if (priv->bcd_version >= OPENPGP_CARD_3_4) {
+		/* Parse supported algorithms from Algorithm Information DO
+		 * see OpenPGP card spec 3.4 section 4.4.3.11 */
+		if (pgp_get_blob(card, priv->mf, 0x00fa, &blobfa) >= 0) {
+			pgp_blob_t *child;
+			pgp_enumerate_blob(card, blobfa);
+			/* There will be multiple children with the same ID, but
+			 * different algos, so we need to iterate over all of them */
+			for (child = blobfa->files; child; child = child->next) {
+				if ((child->id < 0x00c1) || (child->id > 0x00c3))
+					continue;
+				sc_cardctl_openpgp_key_gen_store_info_t key_info;
+				if (pgp_parse_algo_attr_blob(card, child, &key_info) >= 0)
+					handled_algos += _pgp_add_algo(card, &key_info, 0x00fa);
+			}
+		}
 	}
 
 	/* v1.1 & v2.x: special DOs are limited to 254 bytes */
@@ -797,84 +946,6 @@ pgp_get_card_features(sc_card_t *card)
 			card->max_pin_len = blob->data[1];
 		}
 
-		/* get _current_ algorithms & key lengths from "algorithm attributes" DOs
-		 *
-		 * All available algorithms should be already provided by pgp_init. However, if another
-		 * algorithm is found in the "algorithm attributes" DOs, it is supported by the card as
-		 * well and therefore added
-		 * see OpenPGP card spec 1.1 & 2.x section 4.3.3.6 / v3.x section 4.4.3.7 */
-		for (i = 0x00c1; i <= 0x00c3; i++) {
-			sc_cardctl_openpgp_keygen_info_t key_info;
-
-			sc_log(card->ctx, "Parsing algorithm attribues DO %zX" , i);
-
-			/* OpenPGP card spec 1.1 & 2.x section 4.3.3.6 / v3.x section 4.4.3.7 */
-			if ((pgp_get_blob(card, blob73, i, &blob) >= 0) &&
-			    (pgp_parse_algo_attr_blob(card, blob, &key_info) >= 0)) {
-				unsigned long flags = 0, ext_flags = 0;
-
-				/* RSA [RFC 4880] */
-				switch (key_info.algorithm) {
-				case SC_OPENPGP_KEYALGO_RSA:
-					/* OpenPGP card spec 1.1 & 2.x, section 7.2.9 & 7.2.10 /
-					 * v3.x section 7.2.11 & 7.2.12 */
-					flags = SC_ALGORITHM_RSA_PAD_PKCS1 |
-						SC_ALGORITHM_RSA_HASH_NONE |
-						SC_ALGORITHM_ONBOARD_KEY_GEN;	/* key gen on card */
-
-					_sc_card_add_rsa_alg(card, key_info.u.rsa.modulus_len, flags, 0);
-					sc_log(card->ctx, "DO %zX: Added RSA algorithm, mod_len = %"
-						SC_FORMAT_LEN_SIZE_T"u",
-						i, key_info.u.rsa.modulus_len);
-					break;
-				case SC_OPENPGP_KEYALGO_ECDH:
-					/* The montgomery curve (curve25519) needs to go through
-					 * different paths, otherwise we handle it as a normal EC key */
-					if (sc_compare_oid(&key_info.u.ec.oid, &curve25519_oid)) {
-						/* CKM_XEDDSA supports both Sign and Derive, but
-						 * OpenPGP card supports only derivation using these
-						 * keys as far as I know */
-						_sc_card_add_xeddsa_alg(card, key_info.u.ec.key_length,
-							SC_ALGORITHM_ECDH_CDH_RAW, 0, &key_info.u.ec.oid);
-
-						sc_log(card->ctx, "DO %zX: Added XEDDSA algorithm (%d), mod_len = %d" ,
-							i, key_info.algorithm, key_info.u.ec.key_length);
-						break;
-					}
-					/* fall through */
-				case SC_OPENPGP_KEYALGO_ECDSA:
-					/* v3.0+: ECC [RFC 4880 & 6637] */
-					/* EdDSA from draft-ietf-openpgp-rfc4880bis-08 */
-					flags = 0, ext_flags = 0;
-
-					if (key_info.algorithm == SC_OPENPGP_KEYALGO_ECDH)
-						flags = SC_ALGORITHM_ECDH_CDH_RAW;
-					if (key_info.algorithm == SC_OPENPGP_KEYALGO_ECDSA)
-						flags = SC_ALGORITHM_ECDSA_RAW;
-					flags |= SC_ALGORITHM_ECDSA_HASH_NONE;
-					flags |= SC_ALGORITHM_ONBOARD_KEY_GEN;
-					ext_flags =  SC_ALGORITHM_EXT_EC_NAMEDCURVE;
-
-					_sc_card_add_ec_alg(card, key_info.u.ec.key_length, flags, ext_flags,
-						&key_info.u.ec.oid);
-					sc_log(card->ctx, "DO %zX: Added EC algorithm (%d), mod_len = %d" ,
-						i, key_info.algorithm, key_info.u.ec.key_length);
-					break;
-				case SC_OPENPGP_KEYALGO_EDDSA:
-					_sc_card_add_eddsa_alg(card, key_info.u.ec.key_length,
-						SC_ALGORITHM_EDDSA_RAW, 0, &key_info.u.ec.oid);
-
-					sc_log(card->ctx, "DO %zX: Added EDDSA algorithm (%d), mod_len = %d" ,
-						i, key_info.algorithm, key_info.u.ec.key_length);
-					break;
-				default:
-					sc_log(card->ctx, "DO %zX: Unknown algorithm ID (%d)" ,
-						i, key_info.algorithm);
-					break;
-				}
-			}
-		}
-
 		if (priv->bcd_version >= OPENPGP_CARD_3_0) {
 			/* v3.0+: get length info from "extended length information" DO */
 			if ((pgp_get_blob(card, blob6e, 0x7f66, &blob) >= 0) &&
@@ -884,9 +955,35 @@ pgp_get_card_features(sc_card_t *card)
 				card->max_recv_size = bebytes2ushort(blob->data + 6);
 			}
 		}
+
+		/* if we found at least one usable algo, let's skip other ways to find them */
+		if (handled_algos) {
+			sc_log(card->ctx, "Algo list populated from Algorithm Information DO");
+			LOG_FUNC_RETURN(card->ctx, handled_algos);
+		}
+
+		/* get _current_ algorithms & key lengths from "algorithm attributes" DOs
+		 *
+		 * All available algorithms should be already provided by pgp_init. However, if another
+		 * algorithm is found in the "algorithm attributes" DOs, it is supported by the card as
+		 * well and therefore added
+		 * see OpenPGP card spec 1.1 & 2.x section 4.3.3.6 / v3.x section 4.4.3.7 */
+		for (i = 0x00c1; i <= 0x00c3; i++) {
+			sc_cardctl_openpgp_key_gen_store_info_t key_info;
+
+			sc_log(card->ctx, "Parsing algorithm attributes DO %uX" , i);
+
+			/* OpenPGP card spec 1.1 & 2.x section 4.3.3.6 / v3.x section 4.4.3.7 */
+			if ((pgp_get_blob(card, blob73, i, &blob) >= 0) &&
+			    (pgp_parse_algo_attr_blob(card, blob, &key_info) >= 0)) {
+				if (!_pgp_add_algo(card, &key_info, i))
+					LOG_TEST_RET(card->ctx, SC_ERROR_INTERNAL, "Cannot add algorithm");
+			}
+		}
+
 	}
 
-	return SC_SUCCESS;
+	LOG_FUNC_RETURN(card->ctx, handled_algos);
 }
 
 
@@ -901,7 +998,7 @@ pgp_finish(sc_card_t *card)
 
 		if (priv != NULL) {
 			/* delete fake file hierarchy */
-			pgp_iterate_blobs(priv->mf, 99, pgp_free_blob);
+			pgp_free_blobs(priv->mf);
 
 			/* delete private data */
 			free(priv);
@@ -925,7 +1022,7 @@ pgp_set_blob(pgp_blob_t *blob, const u8 *data, size_t len)
 	blob->status = 0;
 
 	if (len > 0) {
-		void *tmp = calloc(len, 1);
+		void *tmp = calloc(1, len);
 
 		if (tmp == NULL)
 			return SC_ERROR_OUT_OF_MEMORY;
@@ -1101,23 +1198,21 @@ pgp_free_blob(pgp_blob_t *blob)
 
 
 /**
- * Internal: iterate through the blob tree, calling a function for each blob.
+ * Internal: iterate through the blob tree, calling pgp_free_blob for each blob.
  */
 static void
-pgp_iterate_blobs(pgp_blob_t *blob, int level, void (*func)())
+pgp_free_blobs(pgp_blob_t *blob)
 {
 	if (blob) {
-		if (level > 0) {
-			pgp_blob_t *child = blob->files;
+		pgp_blob_t *child = blob->files;
 
-			while (child != NULL) {
-				pgp_blob_t *next = child->next;
+		while (child != NULL) {
+			pgp_blob_t *next = child->next;
 
-				pgp_iterate_blobs(child, level-1, func);
-				child = next;
-			}
+			pgp_free_blobs(child);
+			child = next;
 		}
-		func(blob);
+		pgp_free_blob(blob);
 	}
 }
 
@@ -1180,6 +1275,7 @@ pgp_enumerate_blob(sc_card_t *card, pgp_blob_t *blob)
 {
 	const u8	*in;
 	int		r;
+	sc_file_t	*file = NULL;
 
 	if (blob->files != NULL)
 		return SC_SUCCESS;
@@ -1200,20 +1296,31 @@ pgp_enumerate_blob(sc_card_t *card, pgp_blob_t *blob)
 
 		r = sc_asn1_read_tag(&data, blob->len - (in - blob->data),
 					&cla, &tag, &len);
-		if (r < 0 || data == NULL) {
-			sc_log(card->ctx,
-				 "Unexpected end of contents\n");
+		if (r == SC_ERROR_INVALID_ASN1_OBJECT) {
+			sc_log(card->ctx, "Invalid ASN.1 object");
 			return SC_ERROR_OBJECT_NOT_VALID;
 		}
-
-		if (data + len > blob->data + blob->len)
+		/* Check for unknown error, or empty data */
+		if (((r < 0) && (r != SC_ERROR_ASN1_END_OF_CONTENTS)) ||
+		    (data == NULL)) {
+			sc_log(card->ctx, "Unexpected end of contents");
 			return SC_ERROR_OBJECT_NOT_VALID;
+		}
 
 		/* undo ASN1's split of tag & class */
 		for (tmptag = tag; tmptag > 0x0FF; tmptag >>= 8) {
 			cla <<= 8;
 		}
 		tag |= cla;
+		/* Check for length mismatch */
+		if ((r == SC_ERROR_ASN1_END_OF_CONTENTS) ||
+		    (data + len > blob->data + blob->len)) {
+			// Check if it is not known Yubikey 5 issue
+			if ((tag != blob->id) || (tag != 0xfa)) {
+				sc_log(card->ctx, "Unexpected end of contents");
+				return SC_ERROR_OBJECT_NOT_VALID;
+			}
+		}
 
 		/* Awful hack for composite DOs that have
 		 * a TLV with the DO's id encompassing the
@@ -1225,9 +1332,15 @@ pgp_enumerate_blob(sc_card_t *card, pgp_blob_t *blob)
 
 		/* create fake file system hierarchy by
 		 * using constructed DOs as DF */
-		if ((new = pgp_new_blob(card, blob, tag, sc_file_new())) == NULL)
+		file = sc_file_new();
+		if ((new = pgp_new_blob(card, blob, tag, file)) == NULL) {
+			sc_file_free(file);
 			return SC_ERROR_OUT_OF_MEMORY;
-		pgp_set_blob(new, data, len);
+		}
+		if (pgp_set_blob(new, data, len) != SC_SUCCESS) {
+			sc_file_free(file);
+			return SC_ERROR_OUT_OF_MEMORY;
+		}
 		in = data + len;
 	}
 
@@ -1515,7 +1628,7 @@ pgp_get_challenge(struct sc_card *card, u8 *rnd, size_t len)
  */
 static int
 pgp_read_binary(sc_card_t *card, unsigned int idx,
-		u8 *buf, size_t count, unsigned long flags)
+		u8 *buf, size_t count, unsigned long *flags)
 {
 	struct pgp_priv_data *priv = DRVDATA(card);
 	pgp_blob_t	*blob;
@@ -1587,7 +1700,7 @@ pgp_get_pubkey_pem(sc_card_t *card, unsigned int tag, u8 *buf, size_t buf_len)
 	struct pgp_priv_data *priv = DRVDATA(card);
 	pgp_blob_t	*blob, *mod_blob, *exp_blob, *pubkey_blob, *blob6e, *blob73, *aa_blob;
 	sc_pkcs15_pubkey_t p15pubkey;
-	sc_cardctl_openpgp_keygen_info_t key_info;
+	sc_cardctl_openpgp_key_gen_store_info_t key_info;
 	unsigned int	aa_tag = 0;
 	u8		*data = NULL;
 	size_t		len = 0;
@@ -1635,8 +1748,8 @@ pgp_get_pubkey_pem(sc_card_t *card, unsigned int tag, u8 *buf, size_t buf_len)
 				/* In EDDSA key case we do not have to care about OIDs
 				 * as we support only one for now */
 				p15pubkey.algorithm = SC_ALGORITHM_EDDSA;
-				p15pubkey.u.eddsa.pubkey.value = pubkey_blob->data;
-				p15pubkey.u.eddsa.pubkey.len = pubkey_blob->len;
+				p15pubkey.u.ec.ecpointQ.value = pubkey_blob->data;
+				p15pubkey.u.ec.ecpointQ.len = pubkey_blob->len;
 				/* PKCS#11 3.0: 2.3.5 Edwards EC public keys only support the use
 				 * of the curveName selection to specify a curve name as defined
 				 * in [RFC 8032] */
@@ -1646,8 +1759,8 @@ pgp_get_pubkey_pem(sc_card_t *card, unsigned int tag, u8 *buf, size_t buf_len)
 				/* This yields either EC(DSA) key or EC_MONTGOMERY (curve25519) key */
 				if (sc_compare_oid(&key_info.u.ec.oid, &curve25519_oid)) {
 					p15pubkey.algorithm = SC_ALGORITHM_XEDDSA;
-					p15pubkey.u.eddsa.pubkey.value = pubkey_blob->data;
-					p15pubkey.u.eddsa.pubkey.len = pubkey_blob->len;
+					p15pubkey.u.ec.ecpointQ.value = pubkey_blob->data;
+					p15pubkey.u.ec.ecpointQ.len = pubkey_blob->len;
 					/* PKCS#11 3.0 2.3.7 Montgomery EC public keys only support
 					 * the use of the curveName selection to specify a curve
 					 * name as defined in [RFC7748] */
@@ -1688,17 +1801,15 @@ pgp_get_pubkey_pem(sc_card_t *card, unsigned int tag, u8 *buf, size_t buf_len)
 		p15pubkey.u.rsa.modulus.len = 0;
 		p15pubkey.u.rsa.exponent.data  = NULL;
 		p15pubkey.u.rsa.exponent.len = 0;
-	} else if (p15pubkey.algorithm == SC_ALGORITHM_EC) {
+	} else if (p15pubkey.algorithm == SC_ALGORITHM_EC ||
+			p15pubkey.algorithm == SC_ALGORITHM_EDDSA ||
+			p15pubkey.algorithm == SC_ALGORITHM_XEDDSA) {
 		p15pubkey.u.ec.ecpointQ.value = NULL;
 		p15pubkey.u.ec.ecpointQ.len = 0;
 		/* p15pubkey.u.ec.params.der and named_curve will be freed by sc_pkcs15_erase_pubkey */
-	} else if (p15pubkey.algorithm == SC_ALGORITHM_EDDSA
-		|| p15pubkey.algorithm == SC_ALGORITHM_XEDDSA) {
-		p15pubkey.u.eddsa.pubkey.value = NULL;
-		p15pubkey.u.eddsa.pubkey.len = 0;
 	}
 	sc_pkcs15_erase_pubkey(&p15pubkey);
-	
+
 	LOG_TEST_RET(card->ctx, r, "public key encoding failed");
 
 	if (len > buf_len)
@@ -1707,6 +1818,48 @@ pgp_get_pubkey_pem(sc_card_t *card, unsigned int tag, u8 *buf, size_t buf_len)
 	free(data);
 
 	LOG_FUNC_RETURN(card->ctx, (int)len);
+}
+
+
+/**
+ * Internal: SELECT DATA - selects a DO within a DO tag with several instances
+ * (supported since OpenPGP Card v3 for DO 7F21 only, see section 7.2.5 of the specification;
+ *  this enables us to store multiple Card holder certificates in DO 7F21)
+ *
+ * p1: number of an instance (DO 7F21: 0x00 for AUT, 0x01 for DEC and 0x02 for SIG)
+ */
+static int
+pgp_select_data(sc_card_t *card, u8 p1)
+{
+	sc_apdu_t	apdu;
+	u8	apdu_data[6];
+	int	r;
+	struct pgp_priv_data *priv = DRVDATA(card);
+
+	LOG_FUNC_CALLED(card->ctx);
+
+	if (priv->bcd_version < OPENPGP_CARD_3_0)
+		LOG_FUNC_RETURN(card->ctx, SC_ERROR_NOT_SUPPORTED);
+
+	sc_log(card->ctx, "select data with: %u", p1);
+
+	// create apdu data (taken from spec: SELECT DATA 7.2.5.)
+	apdu_data[0] = 0x60;
+	apdu_data[1] = 0x04;
+	apdu_data[2] = 0x5c;
+	apdu_data[3] = 0x02;
+	apdu_data[4] = 0x7f;
+	apdu_data[5] = 0x21;
+
+	// apdu, cla, ins, p1, p2, data, datalen, resp, resplen
+	sc_format_apdu_ex(&apdu, 0x00, 0xA5, p1, 0x04, apdu_data, sizeof(apdu_data), NULL, 0);
+
+	// transmit apdu
+	r = sc_transmit_apdu(card, &apdu);
+	LOG_TEST_RET(card->ctx, r, "APDU transmit failed");
+	r = sc_check_sw(card, apdu.sw1, apdu.sw2);
+	LOG_TEST_RET(card->ctx, r, "Card returned error");
+	LOG_FUNC_RETURN(card->ctx, r);
 }
 
 
@@ -1749,7 +1902,6 @@ pgp_get_data(sc_card_t *card, unsigned int tag, u8 *buf, size_t buf_len)
 	LOG_FUNC_RETURN(card->ctx, (int)apdu.resplen);
 }
 
-
 /**
  * Internal: write certificate for Gnuk.
  */
@@ -1784,7 +1936,7 @@ gnuk_write_certificate(sc_card_t *card, const u8 *buf, size_t length)
 		       i+1, i*256, plen);
 
 		/* 1st chunk: P1 = 0x85, further chunks: P1 = chunk no */
-		sc_format_apdu(card, &apdu, SC_APDU_CASE_3_SHORT, 0xD6, (i == 0) ? 0x85 : i, 0);
+		sc_format_apdu(card, &apdu, SC_APDU_CASE_3_SHORT, 0xD6, (i == 0) ? 0x85 : (int)i, 0);
 		apdu.flags |= SC_APDU_FLAGS_CHAINING;
 		apdu.data = part;
 		apdu.datalen = apdu.lc = plen;
@@ -2275,7 +2427,7 @@ pgp_decipher(sc_card_t *card, const u8 *in, size_t inlen,
 		}
 		pklen = r;
 
-		/* Calculate lenght of Public Key DO (0x7F49) */
+		/* Calculate length of Public Key DO (0x7F49) */
 		r = sc_asn1_put_tag(0x7f49, NULL, pklen, NULL, 0, NULL);
 		if (r <= 0) {
 			free(temp);
@@ -2315,6 +2467,7 @@ pgp_decipher(sc_card_t *card, const u8 *in, size_t inlen,
 		*/
 		/* fall through */
 	default:
+		free(temp);
 		LOG_FUNC_RETURN(card->ctx, SC_ERROR_INVALID_ARGUMENTS);
 	}
 
@@ -2383,13 +2536,11 @@ pgp_decipher(sc_card_t *card, const u8 *in, size_t inlen,
  * Internal: update algorithm attribute for new key size (before generating key).
  **/
 static int
-pgp_update_new_algo_attr(sc_card_t *card, sc_cardctl_openpgp_keygen_info_t *key_info)
+pgp_update_new_algo_attr(sc_card_t *card, sc_cardctl_openpgp_key_gen_store_info_t *key_info)
 {
 	struct pgp_priv_data *priv = DRVDATA(card);
-	pgp_blob_t *algo_blob;
+	pgp_blob_t *algo_blob = NULL;
 	const unsigned int tag = 0x00C0 | key_info->key_id;
-	u8 *data;
-	int data_len;
 	int r = SC_SUCCESS;
 	unsigned int i;
 
@@ -2403,16 +2554,42 @@ pgp_update_new_algo_attr(sc_card_t *card, sc_cardctl_openpgp_keygen_info_t *key_
 		if (key_info->algorithm == SC_OPENPGP_KEYALGO_ECDH
 				|| key_info->algorithm == SC_OPENPGP_KEYALGO_ECDSA
 				|| key_info->algorithm == SC_OPENPGP_KEYALGO_EDDSA){
-			data_len = key_info->u.ec.oid_len+1;
-			data = malloc(data_len);
-			if (!data)
-				LOG_FUNC_RETURN(card->ctx, SC_ERROR_NOT_ENOUGH_MEMORY);
+			/* Note OpenPGP or current cards do not support 448 size keys yet */
+			unsigned char *aoid = NULL; /* ASN1 */
+			size_t aoid_len;
+			struct sc_object_id *scoid = NULL;
 
-			data[0] = key_info->algorithm;
-			/* oid.value is type int, therefore we need to loop over the values */
-			for (i=0; i < key_info->u.ec.oid_len; i++){
-				data[i+1] = key_info->u.ec.oid.value[i];
+			scoid = &key_info->u.ec.oid;
+			/*
+			 * Current OpenPGP cards use pre RFC8410 OIDs for ECDH and EdDSA
+			 * so convert to older versions of the OIDs.
+			 */
+			for (i = 0; ec_curves_alt[i].size > 0; i++) {
+				if (sc_compare_oid(scoid, &ec_curves_alt[i].oid_alt)) {
+					scoid = &ec_curves_alt[i].oid;
+					break;
+				}
 			}
+
+			r = sc_encode_oid(card->ctx, scoid, &aoid, &aoid_len);
+			LOG_TEST_RET(card->ctx, r, "invalid ec oid");
+			if (aoid == NULL || aoid_len < 3 || aoid[1] > 127) {
+				free(aoid);
+				LOG_FUNC_RETURN(card->ctx, SC_ERROR_INTERNAL);
+			}
+
+			key_info->data_len = aoid_len + 1 - 2; /* +1 for algorithm -2 drop 06 len */
+			key_info->data = malloc(key_info->data_len);
+			if (!key_info->data) {
+				free(aoid);
+				LOG_FUNC_RETURN(card->ctx, SC_ERROR_NOT_ENOUGH_MEMORY);
+			}
+
+			key_info->data[0] = key_info->algorithm;
+			for (i = 0; i < aoid_len - 2; i++)
+				key_info->data[i + 1] = aoid[i + 2];
+
+			free(aoid);
 		}
 
 		/* RSA */
@@ -2422,32 +2599,30 @@ pgp_update_new_algo_attr(sc_card_t *card, sc_cardctl_openpgp_keygen_info_t *key_
 			if (key_info->u.rsa.exponent_len == 0 || key_info->u.rsa.modulus_len == 0)
 				LOG_FUNC_RETURN(card->ctx,SC_ERROR_INVALID_ARGUMENTS);
 
-			data_len = 6;
-			data = malloc(data_len);
-			if (!data)
+			key_info->data_len = 6;
+			key_info->data = malloc(key_info->data_len);
+			if (!key_info->data)
 				LOG_FUNC_RETURN(card->ctx, SC_ERROR_NOT_ENOUGH_MEMORY);
 
-			data[0] = key_info->algorithm;
-			ushort2bebytes(data+1, key_info->u.rsa.modulus_len);
+			key_info->data[0] = key_info->algorithm;
+			ushort2bebytes(key_info->data + 1, key_info->u.rsa.modulus_len);
 			/* OpenPGP Card only accepts 32bit as exponent length field,
 			 * although you can import keys with smaller exponent;
 			 * thus we don't change rsa.exponent_len, but ignore it here */
-			ushort2bebytes(data+3, SC_OPENPGP_MAX_EXP_BITS);
+			ushort2bebytes(key_info->data + 3, SC_OPENPGP_MAX_EXP_BITS);
 			/* Import-Format of private key (e,p,q) */
-			data[5] = SC_OPENPGP_KEYFORMAT_RSA_STD;
+			key_info->data[5] = SC_OPENPGP_KEYFORMAT_RSA_STD;
 		}
 		else {
 			sc_log(card->ctx, "Unknown algorithm id");
 			LOG_FUNC_RETURN(card->ctx, SC_ERROR_NOT_SUPPORTED);
 		}
 
-		pgp_set_blob(algo_blob, data, data_len);
-		free(data);
-		r = pgp_put_data(card, tag, algo_blob->data, data_len);
-		/* Note: Don't use pgp_set_blob to set data, because it won't touch the real DO */
+		r = pgp_put_data(card, tag, key_info->data, key_info->data_len);
+		/* Note: pgp_put_data calls pgp_set_blob */
 		LOG_TEST_RET(card->ctx, r, "Cannot set new algorithm attributes");
 	} else {
-		sc_cardctl_openpgp_keygen_info_t old_key_info;
+		sc_cardctl_openpgp_key_gen_store_info_t old_key_info;
 
 		if (pgp_parse_algo_attr_blob(card, algo_blob, &old_key_info) != SC_SUCCESS
 				|| old_key_info.algorithm != key_info->algorithm)
@@ -2511,7 +2686,7 @@ pgp_store_creationtime(sc_card_t *card, u8 key_id, time_t *outtime)
  **/
 static int
 pgp_calculate_and_store_fingerprint(sc_card_t *card, time_t ctime,
-                                    sc_cardctl_openpgp_keygen_info_t *key_info)
+		sc_cardctl_openpgp_key_gen_store_info_t *key_info)
 {
 	u8 fingerprint[SHA_DIGEST_LENGTH];
 	u8 *fp_buffer = NULL;  /* fingerprint buffer, not hashed */
@@ -2549,21 +2724,22 @@ pgp_calculate_and_store_fingerprint(sc_card_t *card, time_t ctime,
 
 	}
 	/* ECC */
-	else if (key_info->algorithm == SC_OPENPGP_KEYALGO_ECDH
-		|| key_info->algorithm == SC_OPENPGP_KEYALGO_ECDSA) {
-		if (key_info->u.ec.ecpoint == NULL || (key_info->u.ec.ecpoint_len) == 0) {
+	else if (key_info->algorithm == SC_OPENPGP_KEYALGO_ECDH || /* also includes XEDDSA */
+			key_info->algorithm == SC_OPENPGP_KEYALGO_ECDSA ||
+			key_info->algorithm == SC_OPENPGP_KEYALGO_EDDSA) {
+		if (key_info->u.ec.ecpointQ == NULL || (key_info->u.ec.ecpointQ_len) == 0) {
 			sc_log(card->ctx, "Error: ecpoint required!");
 			LOG_FUNC_RETURN(card->ctx, SC_ERROR_INVALID_ARGUMENTS);
 		}
 
 		/* https://tools.ietf.org/html/rfc4880  page 41, 72
 		 * and https://tools.ietf.org/html/rfc6637 section 9 (page 8 and 9) */
-		pk_packet_len =   1   /* version number */
-				+ 4   /* creation time */
-				+ 1   /* algorithm */
-				+ 1   /* oid len */
-				+ (key_info->u.ec.oid_len) /* oid */
-				+ (key_info->u.ec.ecpoint_len); /* ecpoint */
+		pk_packet_len = 1			       /* version number */
+				+ 4			       /* creation time */
+				+ 1			       /* algorithm */
+				+ 1			       /* oid len */
+				+ key_info->u.ec.oidv_len      /* oid */
+				+ key_info->u.ec.ecpointQ_len; /* ecpoint */
 
 		/* KDF parameters for ECDH */
 		if (key_info->algorithm == SC_OPENPGP_KEYALGO_ECDH) {
@@ -2573,13 +2749,12 @@ pgp_calculate_and_store_fingerprint(sc_card_t *card, time_t ctime,
 					 + 1	/* KDF algo */
 					 + 1;	/* KEK algo */
 		}
-	}
-	else
+	} else
 		LOG_FUNC_RETURN(card->ctx, SC_ERROR_NOT_SUPPORTED);
 	sc_log(card->ctx, "pk_packet_len is %"SC_FORMAT_LEN_SIZE_T"u", pk_packet_len);
 
 	fp_buffer_len = 3 + pk_packet_len;
-	p = fp_buffer = calloc(fp_buffer_len, 1);
+	p = fp_buffer = calloc(1, fp_buffer_len);
 	if (p == NULL)
 		LOG_FUNC_RETURN(card->ctx, SC_ERROR_NOT_ENOUGH_MEMORY);
 
@@ -2594,53 +2769,58 @@ pgp_calculate_and_store_fingerprint(sc_card_t *card, time_t ctime,
 
 	/* RSA */
 	if (key_info->algorithm == SC_OPENPGP_KEYALGO_RSA) {
+		unsigned short bytes_length = 0;
+
 		*p = 1; /* Algorithm ID, RSA */
 		p += 1;
+
+		/* Modulus */
+		bytes_length = BYTES4BITS(key_info->u.rsa.modulus_len);
 		ushort2bebytes(p, (unsigned short)key_info->u.rsa.modulus_len);
 		p += 2;
-		memcpy(p, key_info->u.rsa.modulus, (BYTES4BITS(key_info->u.rsa.modulus_len)));
-		p += (key_info->u.rsa.modulus_len >> 3);
-		ushort2bebytes(++p, (unsigned short)key_info->u.rsa.exponent_len);
+		memcpy(p, key_info->u.rsa.modulus, bytes_length);
+		p += bytes_length;
+
+		/* Exponent */
+		bytes_length = BYTES4BITS(key_info->u.rsa.exponent_len);
+		ushort2bebytes(p, (unsigned short)key_info->u.rsa.exponent_len);
 		p += 2;
-		memcpy(p, key_info->u.rsa.exponent, (BYTES4BITS(key_info->u.rsa.exponent_len)));
+		memcpy(p, key_info->u.rsa.exponent, bytes_length);
 	}
 	/* ECC */
-	else if (key_info->algorithm == SC_OPENPGP_KEYALGO_ECDH
-		|| key_info->algorithm == SC_OPENPGP_KEYALGO_ECDSA
-		|| key_info->algorithm == SC_OPENPGP_KEYALGO_EDDSA) {
+	else if (key_info->algorithm == SC_OPENPGP_KEYALGO_ECDH || /* includes XEDDSA */
+			key_info->algorithm == SC_OPENPGP_KEYALGO_ECDSA ||
+			key_info->algorithm == SC_OPENPGP_KEYALGO_EDDSA) {
 		/* Algorithm ID, see https://tools.ietf.org/html/rfc6637#section-5 */
 		*p = key_info->algorithm + 6;
 		p += 1;
-		*p = key_info->u.ec.oid_len;
+		*p = key_info->u.ec.oidv_len;
 		p += 1;
-		memcpy(p, key_info->u.ec.oid.value, key_info->u.ec.oid_len);
-		p += key_info->u.ec.oid_len;
-		memcpy(p, key_info->u.ec.ecpoint, key_info->u.ec.ecpoint_len);
+		memcpy(p, key_info->u.ec.oidv.value, key_info->u.ec.oidv_len);
+		p += key_info->u.ec.oidv_len;
+		memcpy(p, key_info->u.ec.ecpointQ, key_info->u.ec.ecpointQ_len);
 
 		/* KDF parameters for ECDH */
 		if (key_info->algorithm == SC_OPENPGP_KEYALGO_ECDH) {
 			/* https://tools.ietf.org/html/rfc6637#section-8
 			 * This is copied from GnuPG's ecdh_params() function in app-openpgp.c */
-			p += key_info->u.ec.ecpoint_len;
+			p += BYTES4BITS(key_info->u.ec.ecpointQ_len);
 			*p = 0x03; /* number of bytes following */
 			p += 1;
 			*p = 0x01; /* version of this format */
 			p += 1;
-			if (key_info->u.ec.ecpoint_len <= 256){       /* ec bit size <= 256 */
+			if (key_info->u.ec.key_length <= 256) { /* ec bit size <= 256 */
 				*p = 0x08;	/* KDF algo */
 				*(p+1) = 0x07;	/* KEK algo */
-			}
-			else if (key_info->u.ec.ecpoint_len <= 384) { /* ec bit size <= 384 */
+			} else if (key_info->u.ec.key_length <= 384) { /* ec bit size <= 384 */
 				*p = 0x09;	/* KDF algo */
 				*(p+1) = 0x08;	/* KEK algo */
-			}
-			else {					       /* ec bit size = 512 or 521*/
+			} else {		/* ec bit size = 512 or 521*/
 				*p = 0x0a;	/* KDF algo */
 				*(p+1) = 0x09;	/* KEK algo */
 			}
 		}
-	}
-	else
+	} else
 		LOG_FUNC_RETURN(card->ctx, SC_ERROR_NOT_SUPPORTED);
 
 	p = NULL;
@@ -2657,14 +2837,21 @@ pgp_calculate_and_store_fingerprint(sc_card_t *card, time_t ctime,
 	/* update the blob containing fingerprints (00C5) */
 	sc_log(card->ctx, "Updating fingerprint blob 00C5.");
 	fpseq_blob = pgp_find_blob(card, 0x00C5);
-	if (fpseq_blob == NULL)
-		LOG_TEST_GOTO_ERR(card->ctx, SC_ERROR_OUT_OF_MEMORY, "Cannot find blob 00C5");
+	if (fpseq_blob == NULL) {
+		r = SC_ERROR_OUT_OF_MEMORY;
+		LOG_TEST_GOTO_ERR(card->ctx, r, "Cannot find blob 00C5");
+	}
+	if (20U * key_info->key_id > fpseq_blob->len) {
+		r = SC_ERROR_OBJECT_NOT_VALID;
+		LOG_TEST_GOTO_ERR(card->ctx, r, "The 00C5 blob is not large enough");
+	}
 
 	/* save the fingerprints sequence */
 	newdata = malloc(fpseq_blob->len);
-	if (newdata == NULL)
-		LOG_TEST_GOTO_ERR(card->ctx, SC_ERROR_OUT_OF_MEMORY,
-			"Not enough memory to update fingerprint blob 00C5");
+	if (newdata == NULL) {
+		r = SC_ERROR_OUT_OF_MEMORY;
+		LOG_TEST_GOTO_ERR(card->ctx, r, "Not enough memory to update fingerprint blob 00C5");
+	}
 
 	memcpy(newdata, fpseq_blob->data, fpseq_blob->len);
 	/* move p to the portion holding the fingerprint of the current key */
@@ -2685,7 +2872,7 @@ err:
  * Note that modulus_len, exponent_len is measured in bit.
  **/
 static int
-pgp_update_pubkey_blob(sc_card_t *card, sc_cardctl_openpgp_keygen_info_t *key_info)
+pgp_update_pubkey_blob(sc_card_t *card, sc_cardctl_openpgp_key_gen_store_info_t *key_info)
 {
 	struct pgp_priv_data *priv = DRVDATA(card);
 	pgp_blob_t *pk_blob;
@@ -2723,21 +2910,28 @@ pgp_update_pubkey_blob(sc_card_t *card, sc_cardctl_openpgp_keygen_info_t *key_in
 		p15pubkey.u.rsa.exponent.len  = BYTES4BITS(key_info->u.rsa.exponent_len);
 	}
 	/* ECC */
-	else if (key_info->algorithm == SC_OPENPGP_KEYALGO_ECDH
-			|| key_info->algorithm == SC_OPENPGP_KEYALGO_ECDSA){
+	else if (key_info->algorithm == SC_OPENPGP_KEYALGO_ECDH || /* includes XEDDSA */
+			key_info->algorithm == SC_OPENPGP_KEYALGO_ECDSA ||
+			key_info->algorithm == SC_OPENPGP_KEYALGO_EDDSA) {
 		memset(&p15pubkey, 0, sizeof(p15pubkey));
-		p15pubkey.algorithm = SC_ALGORITHM_EC;
-		p15pubkey.u.ec.ecpointQ.value = key_info->u.ec.ecpoint;
-		p15pubkey.u.ec.ecpointQ.len = key_info->u.ec.ecpoint_len;
-	}
-	else
+		p15pubkey.algorithm = key_info->key_type;
+		p15pubkey.u.ec.ecpointQ.value = key_info->u.ec.ecpointQ;
+		p15pubkey.u.ec.ecpointQ.len = key_info->u.ec.ecpointQ_len;
+	} else
 		LOG_FUNC_RETURN(card->ctx, SC_ERROR_INVALID_ARGUMENTS);
 
-	r = sc_pkcs15_encode_pubkey(card->ctx, &p15pubkey, &data, &len);
+	r = sc_pkcs15_encode_pubkey_as_spki(card->ctx, &p15pubkey, &data, &len);
+	/*
+	 * key_info is missing an algo_id. sc_pkcs15_encode_pubkey_as_spki
+	 * allocates one. Free it here.
+	 */
+	free(p15pubkey.alg_id);
+	p15pubkey.alg_id = NULL;
 	LOG_TEST_RET(card->ctx, r, "Cannot encode pubkey");
 
 	sc_log(card->ctx, "Updating blob %04X's content.", blob_id);
 	r = pgp_set_blob(pk_blob, data, len);
+	free(data);
 	LOG_TEST_RET(card->ctx, r, "Cannot update blob content");
 	LOG_FUNC_RETURN(card->ctx, r);
 }
@@ -2747,8 +2941,8 @@ pgp_update_pubkey_blob(sc_card_t *card, sc_cardctl_openpgp_keygen_info_t *key_in
  * Internal: parse response data and set output
  **/
 static int
-pgp_parse_and_set_pubkey_output(sc_card_t *card, u8* data, size_t data_len,
-                                sc_cardctl_openpgp_keygen_info_t *key_info)
+pgp_parse_and_set_pubkey_output(sc_card_t *card, u8 *data, size_t data_len,
+		sc_cardctl_openpgp_key_gen_store_info_t *key_info)
 {
 	time_t ctime = 0;
 	u8 *in = data;
@@ -2757,7 +2951,8 @@ pgp_parse_and_set_pubkey_output(sc_card_t *card, u8* data, size_t data_len,
 
 	/* store creation time */
 	r = pgp_store_creationtime(card, key_info->key_id, &ctime);
-	LOG_TEST_RET(card->ctx, r, "Cannot store creation time");
+	/* TODO for now with GNUK at least, log but do not return error */
+	sc_log(card->ctx, "Cannot store creation time");
 
 	/* parse response. Ref: pgp_enumerate_blob() */
 	while (data_len > (size_t) (in - data)) {
@@ -2778,6 +2973,9 @@ pgp_parse_and_set_pubkey_output(sc_card_t *card, u8* data, size_t data_len,
 
 		/* RSA modulus */
 		if (tag == 0x0081) {
+			if (key_info->algorithm != SC_OPENPGP_KEYALGO_RSA) {
+				LOG_FUNC_RETURN(card->ctx, SC_ERROR_UNKNOWN_DATA_RECEIVED);
+			}
 			if ((BYTES4BITS(key_info->u.rsa.modulus_len) < len)  /* modulus_len is in bits */
 				|| key_info->u.rsa.modulus == NULL) {
 
@@ -2793,6 +2991,9 @@ pgp_parse_and_set_pubkey_output(sc_card_t *card, u8* data, size_t data_len,
 		}
 		/* RSA public exponent */
 		else if (tag == 0x0082) {
+			if (key_info->algorithm != SC_OPENPGP_KEYALGO_RSA) {
+				LOG_FUNC_RETURN(card->ctx, SC_ERROR_UNKNOWN_DATA_RECEIVED);
+			}
 			if ((BYTES4BITS(key_info->u.rsa.exponent_len) < len)  /* exponent_len is in bits */
 				|| key_info->u.rsa.exponent == NULL) {
 
@@ -2806,19 +3007,42 @@ pgp_parse_and_set_pubkey_output(sc_card_t *card, u8* data, size_t data_len,
 			memcpy(key_info->u.rsa.exponent, part, len);
 			key_info->u.rsa.exponent_len = len * 8; /* store length in bits */
 		}
-		/* ECC public key */
+		/* ECC or EDDSA public key */
 		else if (tag == 0x0086) {
-			/* set the output data */
-			/* len is ecpoint length + format byte
-			 * see section 7.2.14 of 3.3.1 specs */
-			if ((key_info->u.ec.ecpoint_len) != (len - 1)
-				|| key_info->u.ec.ecpoint == NULL) {
-				free(key_info->u.ec.ecpoint);
-				key_info->u.ec.ecpoint = malloc(len);
-				if (key_info->u.ec.ecpoint == NULL)
-					LOG_FUNC_RETURN(card->ctx, SC_ERROR_NOT_ENOUGH_MEMORY);
+			/* Note: SC_OPENPGP_KEYALGO_ECDH could be either EC or XEDDSA */
+			if (key_info->algorithm != SC_OPENPGP_KEYALGO_ECDSA &&
+					key_info->algorithm != SC_OPENPGP_KEYALGO_ECDH &&
+					key_info->algorithm != SC_OPENPGP_KEYALGO_EDDSA) {
+				LOG_FUNC_RETURN(card->ctx, SC_ERROR_UNKNOWN_DATA_RECEIVED);
 			}
-			memcpy(key_info->u.ec.ecpoint, part + 1, len - 1);
+			/* set the output data */
+			/* key_info->u.ec.ecpoint_len is already set based on
+			 * key_info->key_type
+			 * EC is in 04||x||y format i.e.
+			 *    (field_length + 7)/8 * 2 + 1 in bytes
+			 *    len is ecpoint length + format byte
+			 *    see section 7.2.14 of 3.3.1 specs
+			 * EDDSA and XEDDSA have no format byte and one number
+			 *    (field_length + 7)/8 in bytes
+			 */
+			/* GNUK returns 04||x||y */
+
+			if (len != key_info->u.ec.ecpointQ_len)
+				LOG_FUNC_RETURN(card->ctx, SC_ERROR_INTERNAL);
+
+			switch (key_info->key_type) {
+			case SC_ALGORITHM_EC:
+			case SC_ALGORITHM_EDDSA:
+			case SC_ALGORITHM_XEDDSA:
+				key_info->u.ec.ecpointQ = malloc(len);
+				if (key_info->u.ec.ecpointQ == NULL)
+					LOG_FUNC_RETURN(card->ctx, SC_ERROR_NOT_ENOUGH_MEMORY);
+				memcpy(key_info->u.ec.ecpointQ, part, len);
+				key_info->u.ec.ecpointQ_len = len;
+				break;
+			default:
+				LOG_FUNC_RETURN(card->ctx, SC_ERROR_INTERNAL);
+			}
 		}
 
 		/* go to next part to parse */
@@ -2830,9 +3054,12 @@ pgp_parse_and_set_pubkey_output(sc_card_t *card, u8* data, size_t data_len,
 	sc_log(card->ctx, "Calculate and store fingerprint");
 	r = pgp_calculate_and_store_fingerprint(card, ctime, key_info);
 	LOG_TEST_RET(card->ctx, r, "Cannot store fingerprint");
+	/* TODO only try and update pubkey if present */
+
 	/* update pubkey blobs (B601, B801, A401) */
 	sc_log(card->ctx, "Update blobs holding pubkey info.");
 	r = pgp_update_pubkey_blob(card, key_info);
+
 	LOG_FUNC_RETURN(card->ctx, r);
 }
 
@@ -2841,17 +3068,18 @@ pgp_parse_and_set_pubkey_output(sc_card_t *card, u8* data, size_t data_len,
  * Internal: update card->algorithms
  */
 static int
-pgp_update_card_algorithms(sc_card_t *card, sc_cardctl_openpgp_keygen_info_t *key_info)
+pgp_update_card_algorithms(sc_card_t *card, sc_cardctl_openpgp_key_gen_store_info_t *key_info)
 {
 	sc_algorithm_info_t *algo;
 	u8 id = key_info->key_id;
+	struct pgp_priv_data *priv = DRVDATA(card);
 
 	LOG_FUNC_CALLED(card->ctx);
 
 	/* protect incompatible cards against non-RSA */
-	if (key_info->algorithm != SC_OPENPGP_KEYALGO_RSA
-		&& card->type < SC_CARD_TYPE_OPENPGP_V3
-		&& card->type != SC_CARD_TYPE_OPENPGP_GNUK)
+	if (key_info->algorithm != SC_OPENPGP_KEYALGO_RSA &&
+			priv->bcd_version < OPENPGP_CARD_3_0 &&
+			card->type != SC_CARD_TYPE_OPENPGP_GNUK)
 		LOG_FUNC_RETURN(card->ctx, SC_ERROR_NOT_SUPPORTED);
 
 	if (id > card->algorithm_count) {
@@ -2867,13 +3095,12 @@ pgp_update_card_algorithms(sc_card_t *card, sc_cardctl_openpgp_keygen_info_t *ke
 	if (key_info->algorithm == SC_OPENPGP_KEYALGO_RSA) {
 		algo->algorithm = SC_ALGORITHM_RSA;
 		algo->key_length = (unsigned int)key_info->u.rsa.modulus_len;
-	}
-	else if (key_info->algorithm == SC_OPENPGP_KEYALGO_ECDH
-		|| key_info->algorithm == SC_OPENPGP_KEYALGO_ECDSA) {
+	} else if (key_info->algorithm == SC_OPENPGP_KEYALGO_ECDH || /* includes XEDDSA */
+			key_info->algorithm == SC_OPENPGP_KEYALGO_ECDSA ||
+			key_info->algorithm == SC_OPENPGP_KEYALGO_EDDSA) {
 		algo->algorithm = SC_ALGORITHM_EC;
-		algo->key_length = (unsigned int)((key_info->u.ec.ecpoint_len));
-	}
-	else
+		algo->key_length = (unsigned int)((key_info->u.ec.ecpointQ_len));
+	} else
 		LOG_FUNC_RETURN(card->ctx, SC_ERROR_INVALID_ARGUMENTS);
 
 	LOG_FUNC_RETURN(card->ctx, SC_SUCCESS);
@@ -2884,7 +3111,7 @@ pgp_update_card_algorithms(sc_card_t *card, sc_cardctl_openpgp_keygen_info_t *ke
  * ABI (card ctl): GENERATE ASYMMETRIC KEY PAIR
  **/
 static int
-pgp_gen_key(sc_card_t *card, sc_cardctl_openpgp_keygen_info_t *key_info)
+pgp_gen_key(sc_card_t *card, sc_cardctl_openpgp_key_gen_store_info_t *key_info)
 {
 	sc_apdu_t apdu;
 	/* temporary variables to hold APDU params */
@@ -2893,16 +3120,14 @@ pgp_gen_key(sc_card_t *card, sc_cardctl_openpgp_keygen_info_t *key_info)
 	size_t apdu_le;
 	size_t resplen = 0;
 	int r = SC_SUCCESS;
+	struct pgp_priv_data *priv = DRVDATA(card);
 
 	LOG_FUNC_CALLED(card->ctx);
 
 	/* protect incompatible cards against non-RSA */
-	if (key_info->algorithm != SC_OPENPGP_KEYALGO_RSA
-		&& card->type < SC_CARD_TYPE_OPENPGP_V3
-		&& card->type != SC_CARD_TYPE_OPENPGP_GNUK)
-		LOG_FUNC_RETURN(card->ctx, SC_ERROR_NOT_SUPPORTED);
-	if (key_info->algorithm == SC_OPENPGP_KEYALGO_EDDSA
-		&& card->type != SC_CARD_TYPE_OPENPGP_GNUK)
+	if (key_info->algorithm != SC_OPENPGP_KEYALGO_RSA &&
+			priv->bcd_version < OPENPGP_CARD_3_0 &&
+			card->type != SC_CARD_TYPE_OPENPGP_GNUK)
 		LOG_FUNC_RETURN(card->ctx, SC_ERROR_NOT_SUPPORTED);
 
 	/* set Control Reference Template for key */
@@ -2950,7 +3175,7 @@ pgp_gen_key(sc_card_t *card, sc_cardctl_openpgp_keygen_info_t *key_info)
 
 	/* buffer to receive response */
 	apdu.resplen = (resplen > 0) ? resplen : apdu_le;
-	apdu.resp = calloc(apdu.resplen, 1);
+	apdu.resp = calloc(1, apdu.resplen);
 	if (apdu.resp == NULL) {
 		LOG_FUNC_RETURN(card->ctx, SC_ERROR_NOT_ENOUGH_MEMORY);
 	}
@@ -3004,7 +3229,8 @@ pgp_build_tlv(sc_context_t *ctx, unsigned int tag, u8 *data, size_t len, u8 **ou
 	while ((tag >> 8*highest_order) != 0) {
 		highest_order++;
 	}
-	highest_order--;
+	if (highest_order != 0)
+		highest_order--;
 
 	/* restore class bits in output */
 	if (highest_order < 4)
@@ -3054,8 +3280,8 @@ set_taglength_tlv(u8 *buffer, unsigned int tag, size_t length)
  * Internal: build Extended Header list (sec 4.3.3.9 - OpenPGP card spec v.3)
  **/
 static int
-pgp_build_extended_header_list(sc_card_t *card, sc_cardctl_openpgp_keystore_info_t *key_info,
-                               u8 **result, size_t *resultlen)
+pgp_build_extended_header_list(sc_card_t *card, sc_cardctl_openpgp_key_gen_store_info_t *key_info,
+		u8 **result, size_t *resultlen)
 {
 	sc_context_t *ctx = card->ctx;
 	/* Cardholder private key template (7F48) part */
@@ -3092,10 +3318,10 @@ pgp_build_extended_header_list(sc_card_t *card, sc_cardctl_openpgp_keystore_info
 	/* RSA */
 	if (key_info->algorithm == SC_OPENPGP_KEYALGO_RSA){
 
-		components[0] = key_info->u.rsa.e;
+		components[0] = key_info->u.rsa.exponent;
 		components[1] = key_info->u.rsa.p;
 		components[2] = key_info->u.rsa.q;
-		componentlens[0] = key_info->u.rsa.e_len;
+		componentlens[0] = key_info->u.rsa.exponent_len;
 		componentlens[1] = key_info->u.rsa.p_len;
 		componentlens[2] = key_info->u.rsa.q_len;
 		componenttags[0] = 0x91;
@@ -3109,49 +3335,48 @@ pgp_build_extended_header_list(sc_card_t *card, sc_cardctl_openpgp_keystore_info
 		/* The maximum exponent length is 32 bit, as set on card
 		 * we use this variable to check against actual exponent_len */
 		size_t max_e_len_bytes = BYTES4BITS(SC_OPENPGP_MAX_EXP_BITS);
-		size_t e_len_bytes = BYTES4BITS(key_info->u.rsa.e_len);
+		size_t e_len_bytes = BYTES4BITS(key_info->u.rsa.exponent_len);
 
 		if (key_info->u.rsa.keyformat == SC_OPENPGP_KEYFORMAT_RSA_STDN
 			|| key_info->u.rsa.keyformat == SC_OPENPGP_KEYFORMAT_RSA_CRTN){
-			components[3] = key_info->u.rsa.n;
-			componentlens[3] = key_info->u.rsa.n_len;
+			components[3] = key_info->u.rsa.modulus;
+			componentlens[3] = key_info->u.rsa.modulus_len;
 			componenttags[3] = 0x97;
 			componentnames[3] = "modulus";
 			comp_to_add = 4;
-		}
 
-		/* validate */
-		if (comp_to_add == 4 && (key_info->u.rsa.n == NULL || key_info->u.rsa.n_len == 0)){
-			sc_log(ctx, "Error: Modulus required!");
-			LOG_FUNC_RETURN(ctx, SC_ERROR_INVALID_ARGUMENTS);
+			/* validate */
+			if (key_info->u.rsa.modulus == NULL || key_info->u.rsa.modulus_len == 0) {
+				sc_log(ctx, "Error: Modulus required!");
+				LOG_FUNC_RETURN(ctx, SC_ERROR_INVALID_ARGUMENTS);
+			}
 		}
 
 		/* Cardholder private key template's data part */
 		memset(pritemplate, 0, max_prtem_len);
 
 		/* maximum 32 bit exponent length allowed on OpenPGP Card */
-		assert(key_info->u.rsa.e_len <= SC_OPENPGP_MAX_EXP_BITS);
+		assert(key_info->u.rsa.exponent_len <= SC_OPENPGP_MAX_EXP_BITS);
 
 		/* We need to right justify the exponent with allowed exponent length,
 		 * e.g. from '01 00 01' to '00 01 00 01' */
-		if (key_info->u.rsa.e_len < SC_OPENPGP_MAX_EXP_BITS) {
+		if (key_info->u.rsa.exponent_len < SC_OPENPGP_MAX_EXP_BITS) {
 			/* create new buffer */
-			p = calloc(max_e_len_bytes, 1);
+			p = calloc(1, max_e_len_bytes);
 			if (!p)
 				LOG_FUNC_RETURN(ctx, SC_ERROR_NOT_ENOUGH_MEMORY);
 
-			memcpy(p + (max_e_len_bytes - e_len_bytes), key_info->u.rsa.e, e_len_bytes);
+			memcpy(p + (max_e_len_bytes - e_len_bytes), key_info->u.rsa.exponent, e_len_bytes);
 			/* set key_info->u.rsa.e to new buffer */
-			free(key_info->u.rsa.e);
-			key_info->u.rsa.e = p;
+			free(key_info->u.rsa.exponent);
+			key_info->u.rsa.exponent = p;
 			components[0] = p;
-			key_info->u.rsa.e_len = SC_OPENPGP_MAX_EXP_BITS; /* we store info in bits */
+			key_info->u.rsa.exponent_len = SC_OPENPGP_MAX_EXP_BITS; /* we store info in bits */
 			componentlens[0] = max_e_len_bytes; /* ... but in bytes for header list */
 		}
 	}
 	/* ECC */
-	else if (key_info->algorithm == SC_OPENPGP_KEYALGO_ECDH
-		|| key_info->algorithm == SC_OPENPGP_KEYALGO_ECDSA){
+	else if (key_info->algorithm == SC_OPENPGP_KEYALGO_ECDH || key_info->algorithm == SC_OPENPGP_KEYALGO_ECDSA || key_info->algorithm == SC_OPENPGP_KEYALGO_EDDSA) {
 		components[0] = key_info->u.ec.privateD;
 		componentlens[0] = key_info->u.ec.privateD_len;
 		componenttags[0] = 0x92;
@@ -3159,24 +3384,23 @@ pgp_build_extended_header_list(sc_card_t *card, sc_cardctl_openpgp_keystore_info
 		comp_to_add = 1;
 
 		/* import public key as well */
-		if (key_info->u.ec.keyformat == SC_OPENPGP_KEYFORMAT_EC_STDPUB){
+		if (key_info->u.ec.keyformat == SC_OPENPGP_KEYFORMAT_EC_STDPUB) {
 			components[1] = key_info->u.ec.ecpointQ;
 			componentlens[1] = key_info->u.ec.ecpointQ_len;
 			componenttags[1] = 0x99;
 			componentnames[1] = "public key";
 			comp_to_add = 2;
-		}
 
-		/* validate */
-		if ((key_info->u.ec.ecpointQ == NULL || key_info->u.ec.ecpointQ_len == 0)){
-			sc_log(ctx, "Error: ecpointQ required!");
-			LOG_FUNC_RETURN(ctx, SC_ERROR_INVALID_ARGUMENTS);
+			/* validate */
+			if ((key_info->u.ec.ecpointQ == NULL || key_info->u.ec.ecpointQ_len == 0)) {
+				sc_log(ctx, "Error: ecpointQ required!");
+				LOG_FUNC_RETURN(ctx, SC_ERROR_INVALID_ARGUMENTS);
+			}
 		}
 
 		/* Cardholder private key template's data part */
 		memset(pritemplate, 0, max_prtem_len);
-	}
-	else
+	} else
 		LOG_FUNC_RETURN(card->ctx, SC_ERROR_NOT_SUPPORTED);
 
 	/* start from beginning of pritemplate */
@@ -3210,7 +3434,7 @@ pgp_build_extended_header_list(sc_card_t *card, sc_cardctl_openpgp_keystore_info
 	/* data part's length for Extended Header list */
 	len = 2 + tlvlen_7f48 + tlvlen_5f48;
 	/* set data part content */
-	data = calloc(len, 1);
+	data = calloc(1, len);
 	if (data == NULL)
 		LOG_TEST_GOTO_ERR(ctx, SC_ERROR_NOT_ENOUGH_MEMORY, "Not enough memory");
 
@@ -3253,19 +3477,29 @@ err:
  * ABI (card ctl): store key
  **/
 static int
-pgp_store_key(sc_card_t *card, sc_cardctl_openpgp_keystore_info_t *key_info)
+pgp_store_key(sc_card_t *card, sc_cardctl_openpgp_key_gen_store_info_t *key_info)
 {
-	sc_cardctl_openpgp_keygen_info_t pubkey;
 	u8 *data = NULL;
 	size_t len = 0;
-	int r;
+	int r = 0;
+	int has_pubkey = 0, has_privkey = 0;
+	struct pgp_priv_data *priv = DRVDATA(card);
 
 	LOG_FUNC_CALLED(card->ctx);
 
+	/* PKCS11 loads privkey separately from pubkey as two different operations
+	 * So this routine will be called twice to create two different objects.
+	 * pkcs15init only calls once, with both.
+	 * OpenPGP 4.3.1 says modulus and ecpointQ are optional when
+	 * creating the extended header.
+	 * So we can tell the difference and only do appropriate parts of this
+	 * routine.
+	 */
+
 	/* protect incompatible cards against non-RSA */
-	if (key_info->algorithm != SC_OPENPGP_KEYALGO_RSA
-		&& card->type < SC_CARD_TYPE_OPENPGP_V3
-		&& card->type != SC_CARD_TYPE_OPENPGP_GNUK)
+	if (key_info->algorithm != SC_OPENPGP_KEYALGO_RSA &&
+			priv->bcd_version < OPENPGP_CARD_3_0 &&
+			card->type != SC_CARD_TYPE_OPENPGP_GNUK)
 		LOG_FUNC_RETURN(card->ctx, SC_ERROR_NOT_SUPPORTED);
 
 	/* Validate */
@@ -3276,84 +3510,81 @@ pgp_store_key(sc_card_t *card, sc_cardctl_openpgp_keystore_info_t *key_info)
 	/* set algorithm attributes */
 	/* RSA */
 	if (key_info->algorithm == SC_OPENPGP_KEYALGO_RSA){
-		/* we just support standard key format */
-		switch (key_info->u.rsa.keyformat) {
-		case SC_OPENPGP_KEYFORMAT_RSA_STD:
-		case SC_OPENPGP_KEYFORMAT_RSA_STDN:
-			break;
+		has_pubkey = (key_info->u.rsa.modulus && key_info->u.rsa.modulus_len &&
+				key_info->u.rsa.exponent && key_info->u.rsa.exponent_len);
+		has_privkey = (has_pubkey &&
+				key_info->u.rsa.p && key_info->u.rsa.p_len &&
+				key_info->u.rsa.q && key_info->u.rsa.q_len);
 
-		case SC_OPENPGP_KEYFORMAT_RSA_CRT:
-		case SC_OPENPGP_KEYFORMAT_RSA_CRTN:
-			LOG_FUNC_RETURN(card->ctx, SC_ERROR_NOT_SUPPORTED);
-
-		default:
+		if (!has_pubkey && !has_privkey)
 			LOG_FUNC_RETURN(card->ctx, SC_ERROR_INVALID_ARGUMENTS);
+
+		/* we just support standard key format */
+		if (has_privkey) {
+			switch (key_info->u.rsa.keyformat) {
+			case SC_OPENPGP_KEYFORMAT_RSA_STD:
+			case SC_OPENPGP_KEYFORMAT_RSA_STDN:
+				break;
+
+			case SC_OPENPGP_KEYFORMAT_RSA_CRT:
+			case SC_OPENPGP_KEYFORMAT_RSA_CRTN:
+				LOG_FUNC_RETURN(card->ctx, SC_ERROR_NOT_SUPPORTED);
+
+			default:
+				LOG_FUNC_RETURN(card->ctx, SC_ERROR_INVALID_ARGUMENTS);
+			}
 		}
 
 		/* we only support exponent of maximum 32 bits */
-		if (key_info->u.rsa.e_len > SC_OPENPGP_MAX_EXP_BITS) {
+		if (key_info->u.rsa.exponent_len > SC_OPENPGP_MAX_EXP_BITS) {
 			sc_log(card->ctx,
-				   "Exponent %"SC_FORMAT_LEN_SIZE_T"u-bit (>32) is not supported.",
-				   key_info->u.rsa.e_len);
+					"Exponent %" SC_FORMAT_LEN_SIZE_T "u-bit (>32) is not supported.",
+					key_info->u.rsa.exponent_len);
 			LOG_FUNC_RETURN(card->ctx, SC_ERROR_NOT_SUPPORTED);
 		}
-
-		memset(&pubkey, 0, sizeof(pubkey));
-		pubkey.key_id = key_info->key_id;
-		pubkey.algorithm = key_info->algorithm;
-		if (key_info->u.rsa.n && key_info->u.rsa.n_len
-			&& key_info->u.rsa.e && key_info->u.rsa.e_len) {
-			pubkey.u.rsa.modulus = key_info->u.rsa.n;
-			pubkey.u.rsa.modulus_len = key_info->u.rsa.n_len;
-			pubkey.u.rsa.exponent = key_info->u.rsa.e;
-			pubkey.u.rsa.exponent_len = key_info->u.rsa.e_len;
-		}
-		else
-			LOG_FUNC_RETURN(card->ctx,SC_ERROR_INVALID_ARGUMENTS);
 	}
 	/* ECC */
-	else if (key_info->algorithm == SC_OPENPGP_KEYALGO_ECDH
-		|| key_info->algorithm == SC_OPENPGP_KEYALGO_ECDSA){
-		memset(&pubkey, 0, sizeof(pubkey));
-		pubkey.key_id = key_info->key_id;
-		pubkey.algorithm = key_info->algorithm;
-		if (key_info->u.ec.ecpointQ && key_info->u.ec.ecpointQ_len){
-			pubkey.u.ec.ecpoint = key_info->u.ec.ecpointQ;
-			pubkey.u.ec.ecpoint_len = key_info->u.ec.ecpointQ_len;
-			pubkey.u.ec.oid = key_info->u.ec.oid;
-			pubkey.u.ec.oid_len = key_info->u.ec.oid_len;
-		}
-		else
-			LOG_FUNC_RETURN(card->ctx,SC_ERROR_INVALID_ARGUMENTS);
+	else if (key_info->algorithm == SC_OPENPGP_KEYALGO_ECDSA ||
+			key_info->algorithm == SC_OPENPGP_KEYALGO_ECDH || /* includes XEDDSA */
+			key_info->algorithm == SC_OPENPGP_KEYALGO_EDDSA) {
+		has_pubkey = (key_info->u.ec.ecpointQ && key_info->u.ec.ecpointQ_len);
+		has_privkey = (key_info->u.ec.privateD && key_info->u.ec.privateD_len);
+
+		if (!has_pubkey && !has_privkey)
+			LOG_FUNC_RETURN(card->ctx, SC_ERROR_INVALID_ARGUMENTS);
+
+		r = pgp_update_new_algo_attr(card, key_info);
+
+		LOG_TEST_RET(card->ctx, r, "Failed to update new algorithm attributes");
 	}
-	else
-		LOG_FUNC_RETURN(card->ctx, SC_ERROR_INVALID_ARGUMENTS);
 
-	r = pgp_update_new_algo_attr(card, &pubkey);
-	LOG_TEST_RET(card->ctx, r, "Failed to update new algorithm attributes");
+	if (has_privkey) {
+		/* build Extended Header list */
+		r = pgp_build_extended_header_list(card, key_info, &data, &len);
+		LOG_TEST_GOTO_ERR(card->ctx, r, "Failed to build Extended Header list");
 
-	/* build Extended Header list */
-	r = pgp_build_extended_header_list(card, key_info, &data, &len);
-	LOG_TEST_GOTO_ERR(card->ctx, r, "Failed to build Extended Header list");
+		/* write to DO */
+		r = pgp_put_data(card, 0x4D, data, len);
+		LOG_TEST_GOTO_ERR(card->ctx, r, "Failed to write to DO 004D");
 
-	/* write to DO */
-	r = pgp_put_data(card, 0x4D, data, len);
-	LOG_TEST_GOTO_ERR(card->ctx, r, "Failed to write to DO 004D");
+		/* store creation time */
+		r = pgp_store_creationtime(card, key_info->key_id, &key_info->creationtime);
+		LOG_TEST_RET(card->ctx, r, "Cannot store creation time");
+	}
 
-	/* store creation time */
-	r = pgp_store_creationtime(card, key_info->key_id, &key_info->creationtime);
-	LOG_TEST_RET(card->ctx, r, "Cannot store creation time");
+	if (has_pubkey) {
+		/* calculate and store fingerprint */
+		sc_log(card->ctx, "Calculate and store fingerprint");
+		r = pgp_calculate_and_store_fingerprint(card, key_info->creationtime, key_info);
+		LOG_TEST_RET(card->ctx, r, "Cannot store fingerprint");
 
-	/* calculate and store fingerprint */
-	sc_log(card->ctx, "Calculate and store fingerprint");
-	r = pgp_calculate_and_store_fingerprint(card, key_info->creationtime, &pubkey);
-	LOG_TEST_RET(card->ctx, r, "Cannot store fingerprint");
-	/* update pubkey blobs (B601,B801, A401) */
-	sc_log(card->ctx, "Update blobs holding pubkey info.");
-	r = pgp_update_pubkey_blob(card, &pubkey);
+		/* update pubkey blobs (B601,B801, A401) */
+		sc_log(card->ctx, "Update blobs holding pubkey info.");
+		r = pgp_update_pubkey_blob(card, key_info);
 
-	sc_log(card->ctx, "Update card algorithms");
-	pgp_update_card_algorithms(card, &pubkey);
+		sc_log(card->ctx, "Update card algorithms");
+		pgp_update_card_algorithms(card, key_info);
+	}
 
 err:
 	free(data);
@@ -3437,6 +3668,18 @@ pgp_erase_card(sc_card_t *card)
 					"Card does not offer life cycle management");
 	}
 
+	if (r == SC_SUCCESS && priv->mf) {
+		pgp_blob_t *new_mf = pgp_new_blob(card, NULL, priv->mf->id, priv->mf->file);
+		if (new_mf == NULL) {
+			LOG_TEST_RET(card->ctx, SC_ERROR_INTERNAL, "Failed to allocate the new MF blob");
+		}
+		priv->mf->file = NULL;
+
+		pgp_free_blobs(priv->mf);
+		priv->mf = new_mf;
+		populate_blobs_to_mf(card, priv);
+	}
+
 	LOG_FUNC_RETURN(card->ctx, r);
 }
 
@@ -3456,15 +3699,17 @@ pgp_card_ctl(sc_card_t *card, unsigned long cmd, void *ptr)
 		memmove((sc_serial_number_t *) ptr, &card->serialnr, sizeof(card->serialnr));
 		LOG_FUNC_RETURN(card->ctx, SC_SUCCESS);
 		break;
-
-#ifdef ENABLE_OPENSSL
-	case SC_CARDCTL_OPENPGP_GENERATE_KEY:
-		r = pgp_gen_key(card, (sc_cardctl_openpgp_keygen_info_t *) ptr);
+	case SC_CARDCTL_OPENPGP_SELECT_DATA:
+		r = pgp_select_data(card, *((u8 *) ptr));
 		LOG_FUNC_RETURN(card->ctx, r);
 		break;
-
+#ifdef ENABLE_OPENSSL
+	case SC_CARDCTL_OPENPGP_GENERATE_KEY:
+		r = pgp_gen_key(card, (sc_cardctl_openpgp_key_gen_store_info_t *)ptr);
+		LOG_FUNC_RETURN(card->ctx, r);
+		break;
 	case SC_CARDCTL_OPENPGP_STORE_KEY:
-		r = pgp_store_key(card, (sc_cardctl_openpgp_keystore_info_t *) ptr);
+		r = pgp_store_key(card, (sc_cardctl_openpgp_key_gen_store_info_t *)ptr);
 		LOG_FUNC_RETURN(card->ctx, r);
 		break;
 #endif /* ENABLE_OPENSSL */
@@ -3540,8 +3785,10 @@ pgp_delete_file(sc_card_t *card, const sc_path_t *path)
 	blob = priv->current;
 
 	/* don't try to delete MF */
-	if (blob == priv->mf)
+	if (blob == priv->mf) {
+		sc_file_free(file);
 		LOG_FUNC_RETURN(card->ctx, SC_ERROR_NOT_SUPPORTED);
+	}
 
 	if (card->type != SC_CARD_TYPE_OPENPGP_GNUK &&
 		(file->id == DO_SIGN_SYM || file->id == DO_ENCR_SYM || file->id == DO_AUTH_SYM)) {
@@ -3561,6 +3808,7 @@ pgp_delete_file(sc_card_t *card, const sc_path_t *path)
 		/* call pgp_put_data() with zero-sized NULL-buffer to zap the DO contents */
 		r = pgp_put_data(card, file->id, NULL, 0);
 	}
+	sc_file_free(file);
 
 	/* set "current" blob to parent */
 	priv->current = blob->parent;
